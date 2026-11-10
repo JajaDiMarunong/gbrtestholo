@@ -3943,7 +3943,9 @@ const HOLOGRAM_PALETTE = {
 // how many signs there are — so adding a second or third sign leaves the first
 // one exactly as large.
 const HOLOGRAM_CAMERA_FOV = 80;
-const HOLOGRAM_ROW_Y = 1.6; // eye height, so the panel sits centred in the view
+// Slightly under eye height: the panel reads as a placard held a touch low
+// rather than a mask strapped across the visitor's view.
+const HOLOGRAM_ROW_Y = 1.54;
 const HOLOGRAM_ROW_DISTANCE = 0.8; // metres: arm's length, not across a room
 const HOLOGRAM_SIGN_FILL = 0.95; // share of the horizontal lens one sign takes
 const HOLOGRAM_SIGN_MAX_ANGLE = 84; // degrees: cap once the window is very wide
@@ -4165,7 +4167,8 @@ function drawHologramSignCanvas({ title, text, image, index, total, canvas: targ
   ctx.stroke();
 
   const hasImage = !!image;
-  let textX = 52;
+  const textLeft = hasImage ? 372 : 52;
+  const textRight = 972;
   if (hasImage) {
     const boxX = 52;
     const boxY = 138;
@@ -4186,23 +4189,27 @@ function drawHologramSignCanvas({ title, text, image, index, total, canvas: targ
     ctx.lineWidth = 3;
     ctx.stroke();
     ctx.restore();
-    textX = 372;
   }
 
   ctx.fillStyle = HOLOGRAM_PALETTE.body;
   const bodyFontSize = hasImage ? 36 : 44;
   ctx.font = `600 ${bodyFontSize}px ${HOLOGRAM_FONT}`;
-  const lines = hologramWrapText(ctx, text || title || "Hologram", 972 - textX, hasImage ? 5 : 4);
+  const lines = hologramWrapText(ctx, text || title || "Hologram", textRight - textLeft, hasImage ? 5 : 4);
   const lineHeight = hasImage ? 46 : 58;
   // Centre the block in the body area so a one-line sign does not float at
-  // the top of an otherwise empty panel.
+  // the top of an otherwise empty panel, and centre each line inside the
+  // column so short and long notes share the same axis.
   const bodyTop = 140;
   const bodyBottom = 430;
   const blockHeight = Math.max(0, (lines.length - 1) * lineHeight);
   const firstBaseline = bodyTop + Math.max(0, (bodyBottom - bodyTop - blockHeight) / 2) + bodyFontSize * 0.82;
+  const textCenter = (textLeft + textRight) / 2;
+  ctx.textAlign = "center";
   lines.forEach((line, lineIndex) => {
-    ctx.fillText(line, textX, firstBaseline + lineIndex * lineHeight);
+    ctx.fillText(line, textCenter, firstBaseline + lineIndex * lineHeight);
   });
+  // hologramLetterSpaced() places characters itself and assumes left alignment.
+  ctx.textAlign = "left";
 
   ctx.strokeStyle = HOLOGRAM_PALETTE.ruleFaint;
   ctx.lineWidth = 2;
@@ -4246,7 +4253,20 @@ function loadHologramSignImageElement(url, crossOrigin) {
   });
 }
 
+// One fetch per URL: the 3D panel and the focused reader show the same photo,
+// and re-downloading it just to draw the second copy would stall the zoom-in.
+const hologramImageCache = new Map();
+
 async function loadHologramSignImage(url) {
+  if (!url) return null;
+  const cached = hologramImageCache.get(url);
+  if (cached) return cached;
+  const image = await loadHologramSignImageSource(url);
+  if (image) hologramImageCache.set(url, image);
+  return image;
+}
+
+async function loadHologramSignImageSource(url) {
   if (!url) return null;
 
   // Preferred path: fetch the bytes ourselves so the canvas stays untainted and
@@ -4381,6 +4401,9 @@ function registerHologramSignComponent() {
       const request = (this.imageRequest += 1);
       const image = await loadHologramSignImage(url);
       if (!image || this.destroyed || request !== this.imageRequest) return;
+      // Kept on the component so the reader can reuse the decoded photo instead
+      // of asking the network for it a second time.
+      this.loadedImage = image;
       drawHologramSignCanvas({
         title: this.data.title,
         text: this.data.text,
@@ -4519,6 +4542,196 @@ if (btnImmersiveSigns) {
   });
 }
 
+// -------------------------------------------------------------------
+// Focused sign reader
+// Tapping a floating panel lifts the same placard onto the screen as a
+// flat, crisp layer, so a long note can be read without squinting at a
+// plane held at arm's length. A gesture only counts as a tap when the
+// pointer barely travelled, so dragging to look around never opens one.
+// -------------------------------------------------------------------
+const holoReader = document.getElementById("holo-reader");
+const holoReaderCanvas = document.getElementById("holo-reader-canvas");
+const btnHoloReaderBack = document.getElementById("btn-holo-reader-back");
+
+const HOLOGRAM_TAP_SLOP = 12; // pixels of travel still counted as a tap
+const HOLOGRAM_TAP_MS = 900; // long enough for a deliberate touch, short enough to reject a hold
+
+let hologramReaderOpen = false;
+let hologramReaderSign = null;
+let hologramTapStart = null;
+let hologramHoverFrame = 0;
+
+function drawHologramReaderCanvas(sign) {
+  if (!holoReaderCanvas || !sign) return;
+  drawHologramSignCanvas({
+    title: sign.title,
+    text: sign.text,
+    image: sign.image || null,
+    index: sign.index,
+    total: sign.total,
+    canvas: holoReaderCanvas,
+  });
+}
+
+function openHologramReader(sign) {
+  if (!holoReader || !sign) return;
+  hologramReaderSign = sign;
+  hologramReaderOpen = true;
+  drawHologramReaderCanvas(sign);
+
+  // The photo usually lands after the panel was built, so the text is painted
+  // immediately and the picture is swapped in once it has decoded.
+  if (sign.imageUrl && !sign.image) {
+    loadHologramSignImage(sign.imageUrl).then((image) => {
+      if (!image || !hologramReaderOpen || hologramReaderSign !== sign) return;
+      sign.image = image;
+      drawHologramReaderCanvas(sign);
+    });
+  }
+
+  holoReader.classList.add("is-open");
+  holoReader.setAttribute("aria-hidden", "false");
+  if (btnHoloReaderBack) {
+    try {
+      btnHoloReaderBack.focus({ preventScroll: true });
+    } catch (_) {
+      btnHoloReaderBack.focus();
+    }
+  }
+}
+
+// `immediate` skips the fade when Immersive Mode itself is being torn down.
+function closeHologramReader(immediate) {
+  hologramReaderOpen = false;
+  hologramReaderSign = null;
+  if (!holoReader) return;
+  holoReader.setAttribute("aria-hidden", "true");
+  if (immediate) {
+    holoReader.classList.add("no-transition");
+    holoReader.classList.remove("is-open");
+    void holoReader.offsetWidth; // flush the jump, so the next open still animates
+    holoReader.classList.remove("no-transition");
+    return;
+  }
+  holoReader.classList.remove("is-open");
+}
+
+// Which sign, if any, sits under this point on the glass? The ray is built from
+// the live A-Frame camera, so it survives a resize or a turned head without any
+// bookkeeping of its own.
+function hologramSignAtPoint(clientX, clientY) {
+  const AFRAME = window.AFRAME;
+  const THREE = AFRAME && AFRAME.THREE;
+  const sceneEl = hologramMountScene;
+  const canvas = sceneEl && sceneEl.canvas;
+  if (!THREE || !canvas || !sceneEl.camera) return null;
+
+  const rect = canvas.getBoundingClientRect();
+  if (!rect.width || !rect.height) return null;
+
+  const meshes = [];
+  const owners = [];
+  hologramSignEntities.forEach((entity) => {
+    const component = entity.components && entity.components["hologram-sign"];
+    const plane = component && component.panelEl;
+    // A-Frame leaves an entity's own object3D a Group and puts the renderable
+    // mesh in a child, so the ray has to be aimed at that child.
+    const mesh = plane && (plane.getObject3D ? plane.getObject3D("mesh") : plane.object3D);
+    if (mesh && mesh.isMesh) {
+      meshes.push(mesh);
+      owners.push(entity);
+    }
+  });
+  if (!meshes.length) return null;
+
+  const ray = new THREE.Raycaster();
+  ray.setFromCamera(
+    new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1
+    ),
+    sceneEl.camera
+  );
+  const hits = ray.intersectObjects(meshes, false);
+  if (!hits.length) return null;
+  const index = meshes.indexOf(hits[0].object);
+  return index >= 0 ? owners[index] : null;
+}
+
+function hologramPointerDown(event) {
+  hologramTapStart = null;
+  if (hologramReaderOpen || !hologramSignsVisible) return;
+  if (!hologramSignEntities.length) return;
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+  hologramTapStart = { id: event.pointerId, x: event.clientX, y: event.clientY, time: Date.now() };
+}
+
+function hologramPointerUp(event) {
+  const start = hologramTapStart;
+  hologramTapStart = null;
+  if (!start || hologramReaderOpen || start.id !== event.pointerId) return;
+  const travel = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+  if (travel > HOLOGRAM_TAP_SLOP || Date.now() - start.time > HOLOGRAM_TAP_MS) return;
+
+  const entity = hologramSignAtPoint(event.clientX, event.clientY);
+  const component = entity && entity.components && entity.components["hologram-sign"];
+  if (!component || !component.data) return;
+  openHologramReader({
+    title: component.data.title,
+    text: component.data.text,
+    imageUrl: component.data.image || "",
+    image: component.loadedImage || null,
+    index: component.data.index,
+    total: component.data.total,
+  });
+}
+
+// Desktop affordance: a panel under the mouse turns the pointer into a hand,
+// which is the only hint the sign gives that it can be opened. One raycast per
+// animation frame, and none at all for touch.
+function hologramPointerMove(event) {
+  if (event.pointerType && event.pointerType !== "mouse") return;
+  if (hologramHoverFrame) return;
+  const { clientX, clientY } = event;
+  hologramHoverFrame = window.requestAnimationFrame(() => {
+    hologramHoverFrame = 0;
+    const canvas = hologramMountScene && hologramMountScene.canvas;
+    if (!canvas) return;
+    const hovered =
+      !hologramReaderOpen && hologramSignsVisible && hologramSignEntities.length
+        ? hologramSignAtPoint(clientX, clientY)
+        : null;
+    canvas.style.cursor = hovered ? "pointer" : "";
+  });
+}
+
+function clearHologramHover() {
+  hologramTapStart = null;
+  const canvas = hologramMountScene && hologramMountScene.canvas;
+  if (canvas) canvas.style.cursor = "";
+}
+
+if (immersiveContainer) {
+  immersiveContainer.addEventListener("pointerdown", hologramPointerDown);
+  immersiveContainer.addEventListener("pointerup", hologramPointerUp);
+  immersiveContainer.addEventListener("pointermove", hologramPointerMove);
+  immersiveContainer.addEventListener("pointercancel", clearHologramHover);
+  immersiveContainer.addEventListener("pointerleave", clearHologramHover);
+}
+
+if (btnHoloReaderBack) {
+  btnHoloReaderBack.addEventListener("click", () => closeHologramReader());
+}
+if (holoReader) {
+  // A tap on the dimmed backdrop dismisses the sign too.
+  holoReader.addEventListener("click", (event) => {
+    if (event.target === holoReader) closeHologramReader();
+  });
+}
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && hologramReaderOpen) closeHologramReader();
+});
+
 if (window.AFRAME) {
   registerHologramSignComponent();
 } else {
@@ -4553,8 +4766,10 @@ immersiveContainer.innerHTML = `
     </a-scene>
   `;
 
-  // Every visit starts with the signs showing.
+  // Every visit starts with the signs showing, and with no sign left open from
+  // an earlier visit.
   hologramSignsVisible = true;
+  closeHologramReader(true);
   mountHologramSigns(art);
 }
 function exitImmersive() {
@@ -4569,6 +4784,7 @@ function exitImmersive() {
   immersiveContainer.innerHTML = "";
   hologramSignEntities = [];
   hologramMountScene = null;
+  closeHologramReader(true);
   if (btnImmersiveSigns) btnImmersiveSigns.classList.add("hidden");
   setBgLayerForScreen(false);
   if (currentDetailArtId !== null) openDetail(currentDetailArtId);

@@ -14,7 +14,7 @@
 <meta name="description" content="Augmented reality digital companion and collection experience for the GBR Jr. Museum." />
 <meta property="og:title" content="GBR Jr. Museum AR" />
 <meta property="og:description" content="Augmented reality digital companion and collection experience for the GBR Jr. Museum." />
-<link rel="stylesheet" href="style.css?v=40" />
+<link rel="stylesheet" href="style.css?v=41" />
 <link rel="manifest" href="manifest.webmanifest" />
 <meta name="theme-color" content="#1a1310" />
 <meta name="mobile-web-app-capable" content="yes" />
@@ -323,6 +323,12 @@
       <button id="btn-immersive-signs" class="btn-icon immersive-signs-toggle hidden" type="button" aria-pressed="true">◈ Holograms On</button>
     </div>
     <div id="immersive-container"></div>
+    <div id="holo-reader" class="holo-reader" aria-hidden="true">
+      <button id="btn-holo-reader-back" class="btn-icon holo-reader-back" type="button">← Back</button>
+      <div class="holo-reader-stage">
+        <canvas id="holo-reader-canvas" class="holo-reader-canvas" width="1536" height="768" aria-label="Hologram sign"></canvas>
+      </div>
+    </div>
   </section>
 
   <nav id="bottom-nav" class="bottom-nav hidden">
@@ -553,6 +559,6 @@
     firebase.initializeApp(firebaseConfig);
   </script>
 
-  <script src="app.js?v=55" defer></script>
+  <script src="app.js?v=56" defer></script>
 </body>
 </html>
