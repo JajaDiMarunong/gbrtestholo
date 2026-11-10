@@ -1943,7 +1943,9 @@ function sanitizeHolograms(raw) {
     })
     .filter(Boolean)
     .slice(0, MAX_HOLOGRAM_SIGNS);
-  return { enabled: source.enabled === true, signs };
+  // Signs are on by default: a record that lists signs but never stored an
+  // explicit false shows them, so saving the editor is all it takes.
+  return { enabled: source.enabled !== false && signs.length > 0, signs };
 }
 
 function hologramSignMarkup(sign) {
@@ -1988,6 +1990,8 @@ function addHologramSignCard() {
   if (!hologramModalList) return;
   if (hologramModalList.querySelectorAll(".hologram-card").length >= MAX_HOLOGRAM_SIGNS) return;
   hologramModalList.insertAdjacentHTML("beforeend", hologramSignMarkup({ text: "", imageUrl: "" }));
+  // Adding a panel is the intent to show it, so the switch follows along.
+  if (hologramModalEnabled) hologramModalEnabled.checked = true;
   updateHologramEditorState();
 }
 

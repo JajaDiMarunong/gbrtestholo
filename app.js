@@ -177,7 +177,9 @@ function normalizeQuiz(raw) {
 // nothing changes on the normal screens.
 // -------------------------------------------------------------------
 const MAX_HOLOGRAM_SIGNS = 3;
-const HOLOGRAM_VISIBILITY_KEY = "museum_holograms_visible";
+// The signs are on by default: Immersive Mode opens with them showing, and the
+// switch in the top bar only hides them for that visit.
+let hologramSignsVisible = true;
 
 function normalizeHologramText(value) {
   return String(value == null ? "" : value).replace(/\s+/g, " ").trim().slice(0, 280);
@@ -194,7 +196,9 @@ function normalizeHolograms(raw) {
     })
     .filter(Boolean)
     .slice(0, MAX_HOLOGRAM_SIGNS);
-  return { enabled: source.enabled === true, signs };
+  // A record that carries signs is on unless it explicitly says otherwise, so a
+  // freshly configured artwork shows its holograms without a second switch.
+  return { enabled: source.enabled !== false && signs.length > 0, signs };
 }
 
 function artworkHasQuiz(art) {
@@ -3908,6 +3912,31 @@ const HOLOGRAM_FONT = "'Segoe UI', system-ui, -apple-system, sans-serif";
 const HOLOGRAM_PANEL_WIDTH = 1.5;
 const HOLOGRAM_PANEL_HEIGHT = 0.75;
 
+// Warm palette borrowed from the museum's own theme (--wall, --panel,
+// --frame-gold and --text in style.css), so a sign reads as a lit gallery
+// placard in the room instead of a cyan sticker pasted over it.
+const HOLOGRAM_PALETTE = {
+  panelTop: "rgba(79, 60, 47, 0.92)",
+  panelMid: "rgba(48, 38, 32, 0.9)",
+  panelBottom: "rgba(29, 22, 19, 0.94)",
+  halo: "rgba(201, 168, 118, 0.26)",
+  frame: "rgba(201, 168, 118, 0.9)",
+  bracket: "rgba(236, 216, 178, 0.95)",
+  label: "rgba(240, 223, 190, 0.9)",
+  labelDim: "rgba(224, 200, 158, 0.78)",
+  imageTint: "rgba(54, 40, 30, 0.34)",
+  imageFrame: "rgba(201, 168, 118, 0.75)",
+  rule: "rgba(201, 168, 118, 0.4)",
+  ruleFaint: "rgba(201, 168, 118, 0.28)",
+  body: "#f6f1e7",
+  scanline: "rgba(224, 190, 140, 0.05)",
+  sheenTop: "rgba(226, 196, 148, 0.11)",
+  sheenBottom: "rgba(226, 196, 148, 0)",
+  panelEmissive: "#3a2b21",
+  glow: "#c9a876",
+  glowEmissive: "#4d3826",
+};
+
 // The camera sits at the visitor's eyes (y = 1.6) behind A-Frame's default lens,
 // which is 80° vertical (not three.js' 60°), so the horizontal field of view
 // follows the viewport aspect. A sign is sized from that lens alone — never from
@@ -4077,21 +4106,21 @@ function drawHologramSignCanvas({ title, text, image, index, total, canvas: targ
 
   hologramRoundRect(ctx, panelX, panelY, panelW, panelH, radius);
   const body = ctx.createLinearGradient(0, panelY, 0, panelY + panelH);
-  body.addColorStop(0, "rgba(12, 52, 70, 0.88)");
-  body.addColorStop(0.55, "rgba(6, 28, 40, 0.84)");
-  body.addColorStop(1, "rgba(4, 17, 26, 0.9)");
+  body.addColorStop(0, HOLOGRAM_PALETTE.panelTop);
+  body.addColorStop(0.55, HOLOGRAM_PALETTE.panelMid);
+  body.addColorStop(1, HOLOGRAM_PALETTE.panelBottom);
   ctx.fillStyle = body;
   ctx.fill();
 
   // Halo drawn just outside the frame so the panel bleeds light.
   ctx.save();
-  ctx.strokeStyle = "rgba(103, 232, 249, 0.22)";
+  ctx.strokeStyle = HOLOGRAM_PALETTE.halo;
   ctx.lineWidth = 16;
   hologramRoundRect(ctx, panelX + 2, panelY + 2, panelW - 4, panelH - 4, radius);
   ctx.stroke();
   ctx.restore();
 
-  ctx.strokeStyle = "rgba(125, 249, 255, 0.85)";
+  ctx.strokeStyle = HOLOGRAM_PALETTE.frame;
   ctx.lineWidth = 4;
   hologramRoundRect(ctx, panelX, panelY, panelW, panelH, radius);
   ctx.stroke();
@@ -4102,7 +4131,7 @@ function drawHologramSignCanvas({ title, text, image, index, total, canvas: targ
     [panelX + 16, panelY + panelH - 16, 1, -1],
     [panelX + panelW - 16, panelY + panelH - 16, -1, -1],
   ];
-  ctx.strokeStyle = "rgba(186, 250, 255, 0.95)";
+  ctx.strokeStyle = HOLOGRAM_PALETTE.bracket;
   ctx.lineWidth = 6;
   brackets.forEach(([x, y, sx, sy]) => {
     ctx.beginPath();
@@ -4115,19 +4144,20 @@ function drawHologramSignCanvas({ title, text, image, index, total, canvas: targ
   ctx.textBaseline = "alphabetic";
   ctx.textAlign = "left";
   ctx.font = `600 22px ${HOLOGRAM_FONT}`;
-  ctx.fillStyle = "rgba(165, 243, 252, 0.82)";
+  ctx.fillStyle = HOLOGRAM_PALETTE.label;
   hologramLetterSpaced(ctx, "GBR JR. MUSEUM", 52, 84, 3);
-  ctx.fillStyle = "rgba(165, 243, 252, 0.68)";
+  // Just the count: "02 / 03" reads as a placard number, not a product name.
+  ctx.fillStyle = HOLOGRAM_PALETTE.labelDim;
   hologramLetterSpaced(
     ctx,
-    `HOLOGRAM ${String(index + 1).padStart(2, "0")} / ${String(total).padStart(2, "0")}`,
+    `${String(index + 1).padStart(2, "0")} / ${String(total).padStart(2, "0")}`,
     972,
     84,
     3,
     "right"
   );
 
-  ctx.strokeStyle = "rgba(103, 232, 249, 0.35)";
+  ctx.strokeStyle = HOLOGRAM_PALETTE.rule;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(52, 110);
@@ -4147,22 +4177,22 @@ function drawHologramSignCanvas({ title, text, image, index, total, canvas: targ
     hologramRoundRect(ctx, boxX, boxY, boxSize, boxSize, 18);
     ctx.clip();
     ctx.drawImage(image, boxX + (boxSize - drawW) / 2, boxY + (boxSize - drawH) / 2, drawW, drawH);
-    ctx.fillStyle = "rgba(8, 47, 73, 0.32)";
+    ctx.fillStyle = HOLOGRAM_PALETTE.imageTint;
     ctx.fillRect(boxX, boxY, boxSize, boxSize);
     ctx.restore();
     ctx.save();
     hologramRoundRect(ctx, boxX, boxY, boxSize, boxSize, 18);
-    ctx.strokeStyle = "rgba(103, 232, 249, 0.7)";
+    ctx.strokeStyle = HOLOGRAM_PALETTE.imageFrame;
     ctx.lineWidth = 3;
     ctx.stroke();
     ctx.restore();
     textX = 372;
   }
 
-  ctx.fillStyle = "#eafcff";
+  ctx.fillStyle = HOLOGRAM_PALETTE.body;
   const bodyFontSize = hasImage ? 36 : 44;
   ctx.font = `600 ${bodyFontSize}px ${HOLOGRAM_FONT}`;
-  const lines = hologramWrapText(ctx, text || title || "Hologram link", 972 - textX, hasImage ? 5 : 4);
+  const lines = hologramWrapText(ctx, text || title || "Hologram", 972 - textX, hasImage ? 5 : 4);
   const lineHeight = hasImage ? 46 : 58;
   // Centre the block in the body area so a one-line sign does not float at
   // the top of an otherwise empty panel.
@@ -4174,32 +4204,30 @@ function drawHologramSignCanvas({ title, text, image, index, total, canvas: targ
     ctx.fillText(line, textX, firstBaseline + lineIndex * lineHeight);
   });
 
-  ctx.strokeStyle = "rgba(103, 232, 249, 0.24)";
+  ctx.strokeStyle = HOLOGRAM_PALETTE.ruleFaint;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(52, 444);
   ctx.lineTo(972, 444);
   ctx.stroke();
 
+  // Footer carries only the artwork title; the corner tag was removed. It starts
+  // inside the corner bracket so the two never overlap.
   ctx.font = `600 20px ${HOLOGRAM_FONT}`;
-  ctx.fillStyle = "rgba(165, 243, 252, 0.72)";
-  ctx.fillText(hologramClipText(ctx, title || "", 640), 52, 476);
-  ctx.textAlign = "right";
-  ctx.fillStyle = "rgba(125, 249, 255, 0.62)";
-  ctx.fillText("◈ AR LINK", 972, 476);
-  ctx.textAlign = "left";
+  ctx.fillStyle = HOLOGRAM_PALETTE.labelDim;
+  ctx.fillText(hologramClipText(ctx, title || "", 848), 80, 476);
 
   // Scanlines and a top sheen, clipped to the frame.
   ctx.save();
   hologramRoundRect(ctx, panelX, panelY, panelW, panelH, radius);
   ctx.clip();
-  ctx.fillStyle = "rgba(125, 249, 255, 0.045)";
+  ctx.fillStyle = HOLOGRAM_PALETTE.scanline;
   for (let y = panelY; y < panelY + panelH; y += 4) {
     ctx.fillRect(panelX, y, panelW, 1);
   }
   const sheen = ctx.createLinearGradient(0, panelY, 0, panelY + 150);
-  sheen.addColorStop(0, "rgba(125, 249, 255, 0.1)");
-  sheen.addColorStop(1, "rgba(125, 249, 255, 0)");
+  sheen.addColorStop(0, HOLOGRAM_PALETTE.sheenTop);
+  sheen.addColorStop(1, HOLOGRAM_PALETTE.sheenBottom);
   ctx.fillStyle = sheen;
   ctx.fillRect(panelX, panelY, panelW, 150);
   ctx.restore();
@@ -4313,7 +4341,7 @@ function registerHologramSignComponent() {
         shader: "standard",
         src: texture,
         color: "#ffffff",
-        emissive: "#0d2f3c",
+        emissive: HOLOGRAM_PALETTE.panelEmissive,
         emissiveIntensity: 0.9,
         roughness: 1,
         metalness: 0,
@@ -4331,8 +4359,8 @@ function registerHologramSignComponent() {
       this.glowEl.setAttribute("material", {
         shader: "standard",
         src: texture,
-        color: "#67e8f9",
-        emissive: "#0b3a4a",
+        color: HOLOGRAM_PALETTE.glow,
+        emissive: HOLOGRAM_PALETTE.glowEmissive,
         emissiveIntensity: 0.6,
         roughness: 1,
         metalness: 0,
@@ -4407,30 +4435,17 @@ function registerHologramSignComponent() {
   });
 }
 
-function readHologramPreference() {
-  try {
-    return localStorage.getItem(HOLOGRAM_VISIBILITY_KEY) !== "0";
-  } catch (_) {
-    return true;
-  }
-}
-
+// Signs start switched on every time Immersive Mode opens, so a visitor never has
+// to hunt for the toggle. The switch still hides them for the rest of the visit.
 function applyHologramVisibility(visible) {
+  hologramSignsVisible = visible !== false;
+  const show = hologramSignsVisible;
   hologramSignEntities.forEach((entity) => {
-    if (entity.object3D) entity.object3D.visible = visible;
+    if (entity.object3D) entity.object3D.visible = show;
   });
   if (btnImmersiveSigns) {
-    btnImmersiveSigns.setAttribute("aria-pressed", visible ? "true" : "false");
-    btnImmersiveSigns.textContent = visible ? "◈ Holograms On" : "◈ Holograms Off";
-  }
-}
-
-function setHologramSignsVisible(visible) {
-  applyHologramVisibility(visible);
-  try {
-    localStorage.setItem(HOLOGRAM_VISIBILITY_KEY, visible ? "1" : "0");
-  } catch (_) {
-    /* private mode: the toggle simply forgets between visits */
+    btnImmersiveSigns.setAttribute("aria-pressed", show ? "true" : "false");
+    btnImmersiveSigns.textContent = show ? "◈ Holograms On" : "◈ Holograms Off";
   }
 }
 
@@ -4465,7 +4480,7 @@ function mountHologramSigns(art) {
       sceneEl.appendChild(entity);
       hologramSignEntities.push(entity);
     });
-    applyHologramVisibility(readHologramPreference());
+    applyHologramVisibility(hologramSignsVisible);
   };
 
   if (sceneEl.hasLoaded) build();
@@ -4500,7 +4515,7 @@ window.addEventListener("resize", () => {
 
 if (btnImmersiveSigns) {
   btnImmersiveSigns.addEventListener("click", () => {
-    setHologramSignsVisible(btnImmersiveSigns.getAttribute("aria-pressed") !== "true");
+    applyHologramVisibility(btnImmersiveSigns.getAttribute("aria-pressed") !== "true");
   });
 }
 
@@ -4538,6 +4553,8 @@ immersiveContainer.innerHTML = `
     </a-scene>
   `;
 
+  // Every visit starts with the signs showing.
+  hologramSignsVisible = true;
   mountHologramSigns(art);
 }
 function exitImmersive() {

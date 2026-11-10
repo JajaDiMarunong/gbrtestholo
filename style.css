@@ -1592,19 +1592,20 @@ button.corner-fabs-right {
   width: 100%;
   height: 100%;
 }
-/* Hologram sign switch: only rendered when the artwork actually has signs. */
+/* Hologram sign switch: brown/gold to match the gallery theme, and only
+   rendered when the artwork actually has signs. */
 #btn-immersive-signs {
   margin-left: auto;
-  border: 1px solid rgba(103, 232, 249, 0.45);
-  color: #a5f3fc;
-  background: rgba(8, 47, 73, 0.55);
-  box-shadow: 0 0 14px rgba(103, 232, 249, 0.25);
+  border: 1px solid var(--frame-gold-dim);
+  color: var(--frame-gold);
+  background: rgba(45, 36, 32, 0.72);
+  box-shadow: 0 0 14px rgba(201, 168, 118, 0.24);
   transition: color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 }
 #btn-immersive-signs[aria-pressed="false"] {
-  color: rgba(244, 241, 234, 0.72);
-  background: rgba(0, 0, 0, 0.5);
-  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--text-dim);
+  background: rgba(26, 19, 16, 0.62);
+  border-color: rgba(201, 168, 118, 0.2);
   box-shadow: none;
 }
 #btn-immersive-signs.hidden { display: none; }
