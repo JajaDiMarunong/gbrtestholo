@@ -3903,35 +3903,51 @@ const HOLOGRAM_FONT = "'Segoe UI', system-ui, -apple-system, sans-serif";
 const HOLOGRAM_PANEL_WIDTH = 1.5;
 const HOLOGRAM_PANEL_HEIGHT = 0.75;
 
-// Wide screens (tablet landscape / desktop): signs sit in a shallow arc so
-// they read as separate objects floating around the artwork.
-const HOLOGRAM_LAYOUTS = {
-  1: [{ x: 0, y: 1.7, z: -2.2, scale: 1 }],
-  2: [
-    { x: -0.78, y: 1.7, z: -2.15, scale: 0.85 },
-    { x: 0.78, y: 1.7, z: -2.15, scale: 0.85 },
-  ],
-  3: [
-    { x: -0.82, y: 1.6, z: -2.15, scale: 0.78 },
-    { x: 0, y: 2.5, z: -2.7, scale: 0.8 },
-    { x: 0.82, y: 1.6, z: -2.15, scale: 0.78 },
-  ],
-};
+// The camera sits at the visitor's eyes (y = 1.6) behind A-Frame's default 60°
+// vertical lens, so the horizontal field of view follows the viewport aspect.
+// Sizing the signs in degrees and converting back to metres is what keeps them
+// close to the visitor without sliding off the side of a narrow phone screen.
+const HOLOGRAM_CAMERA_FOV = 60;
+const HOLOGRAM_ROW_Y = 1.62;
+const HOLOGRAM_SIGN_ANGLE = { 1: 54, 2: 32, 3: 24 }; // ideal on-screen width, degrees
+const HOLOGRAM_SIGN_GAP = 3.2; // breathing room between neighbours, degrees
+const HOLOGRAM_MIN_ANGLE = { 1: 30, 2: 15, 3: 9.5 }; // never shrink below this
+const HOLOGRAM_ROW_DISTANCE = { 1: 1.05, 2: 1.2, 3: 1.3 }; // metres from the eyes
 
-// Phones held upright: the horizontal field of view is narrow, so the same
-// signs stack into a column and stay in front of the visitor's eyes.
-const HOLOGRAM_LAYOUTS_PORTRAIT = {
-  1: [{ x: 0, y: 1.7, z: -2.2, scale: 0.82 }],
-  2: [
-    { x: 0, y: 1.42, z: -2.05, scale: 0.72 },
-    { x: 0, y: 2.06, z: -2.3, scale: 0.72 },
-  ],
-  3: [
-    { x: 0, y: 1.26, z: -2.2, scale: 0.6 },
-    { x: 0, y: 1.82, z: -2.35, scale: 0.6 },
-    { x: 0, y: 2.38, z: -2.5, scale: 0.6 },
-  ],
-};
+function hologramHorizontalFov() {
+  const width = Math.max(window.innerWidth || 0, 1);
+  const height = Math.max(window.innerHeight || 0, 1);
+  const halfFov = (HOLOGRAM_CAMERA_FOV * Math.PI) / 360;
+  return 2 * Math.atan(Math.tan(halfFov) * (width / height));
+}
+
+// One horizontal row, always: every sign shares a height and rides an arc around
+// the visitor so they all stay the same distance away, arm's length and up.
+function hologramRowLayout(count) {
+  const total = Math.max(1, Math.min(Number(count) || 1, MAX_HOLOGRAM_SIGNS));
+  const gap = (HOLOGRAM_SIGN_GAP * Math.PI) / 180;
+  const fov = hologramHorizontalFov();
+  const fitAngle = (fov * 0.94) / total - (total > 1 ? gap : 0);
+  const idealAngle = ((HOLOGRAM_SIGN_ANGLE[total] || 46) * Math.PI) / 180;
+  const minAngle = ((HOLOGRAM_MIN_ANGLE[total] || 13.5) * Math.PI) / 180;
+  const angle = Math.max(Math.min(idealAngle, fitAngle), minAngle);
+  const distance = HOLOGRAM_ROW_DISTANCE[total] || 1.05;
+  const width = 2 * distance * Math.tan(angle / 2);
+  const scale = width / HOLOGRAM_PANEL_WIDTH;
+  const step = angle + gap;
+
+  const spots = [];
+  for (let index = 0; index < total; index += 1) {
+    const offset = (index - (total - 1) / 2) * step;
+    spots.push({
+      x: Number((distance * Math.sin(offset)).toFixed(3)),
+      y: HOLOGRAM_ROW_Y,
+      z: Number((-distance * Math.cos(offset)).toFixed(3)),
+      scale: Number(scale.toFixed(3)),
+    });
+  }
+  return spots;
+}
 
 let hologramMountArt = null;
 let hologramMountPortrait = null;
@@ -3941,8 +3957,7 @@ function isPortraitViewport() {
 }
 
 function hologramLayoutFor(count) {
-  const layouts = isPortraitViewport() ? HOLOGRAM_LAYOUTS_PORTRAIT : HOLOGRAM_LAYOUTS;
-  return layouts[count] || layouts[1];
+  return hologramRowLayout(count);
 }
 
 let hologramSignEntities = [];
@@ -4009,10 +4024,10 @@ function hologramWrapText(ctx, text, maxWidth, maxLines) {
   return trimmed;
 }
 
-function drawHologramSignCanvas({ title, text, image, index, total }) {
-  const canvas = document.createElement("canvas");
-  canvas.width = HOLOGRAM_TEX_WIDTH;
-  canvas.height = HOLOGRAM_TEX_HEIGHT;
+function drawHologramSignCanvas({ title, text, image, index, total, canvas: target }) {
+  const canvas = target || document.createElement("canvas");
+  if (canvas.width !== HOLOGRAM_TEX_WIDTH) canvas.width = HOLOGRAM_TEX_WIDTH;
+  if (canvas.height !== HOLOGRAM_TEX_HEIGHT) canvas.height = HOLOGRAM_TEX_HEIGHT;
   const ctx = canvas.getContext("2d");
   if (!ctx) return canvas;
 
@@ -4109,10 +4124,10 @@ function drawHologramSignCanvas({ title, text, image, index, total }) {
   }
 
   ctx.fillStyle = "#eafcff";
-  const bodyFontSize = hasImage ? 33 : 40;
+  const bodyFontSize = hasImage ? 36 : 44;
   ctx.font = `600 ${bodyFontSize}px ${HOLOGRAM_FONT}`;
-  const lines = hologramWrapText(ctx, text || title || "Hologram link", 972 - textX, hasImage ? 6 : 5);
-  const lineHeight = hasImage ? 44 : 54;
+  const lines = hologramWrapText(ctx, text || title || "Hologram link", 972 - textX, hasImage ? 5 : 4);
+  const lineHeight = hasImage ? 46 : 58;
   // Centre the block in the body area so a one-line sign does not float at
   // the top of an otherwise empty panel.
   const bodyTop = 140;
@@ -4156,29 +4171,71 @@ function drawHologramSignCanvas({ title, text, image, index, total }) {
   return canvas;
 }
 
+function loadHologramSignImageElement(url, crossOrigin) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    if (crossOrigin) image.crossOrigin = crossOrigin;
+    image.decoding = "async";
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("image load failed"));
+    image.src = url;
+  });
+}
+
 async function loadHologramSignImage(url) {
   if (!url) return null;
+
+  // Preferred path: fetch the bytes ourselves so the canvas stays untainted and
+  // the picture can be cropped and tinted like the rest of the panel. The blob
+  // URL is deliberately left alone (revoking it early is what stopped Safari
+  // from ever painting the photo into the texture).
   try {
-    const response = await fetch(url, { credentials: "omit" });
+    const response = await fetch(url, { credentials: "omit", mode: "cors" });
     if (!response.ok) throw new Error(`status ${response.status}`);
     const blob = await response.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const image = new Image();
-    try {
-      await new Promise((resolve, reject) => {
-        image.onload = resolve;
-        image.onerror = () => reject(new Error("decode failed"));
-        image.src = objectUrl;
-      });
-    } finally {
-      URL.revokeObjectURL(objectUrl);
+    const image = await loadHologramSignImageElement(URL.createObjectURL(blob), "");
+    if (image.decode) {
+      try {
+        await image.decode();
+      } catch (_) {
+        /* decode() is advisory; the load event already gives us pixels. */
+      }
     }
     return image;
+  } catch (error) {
+    console.warn("[Hologram] Fetch for sign image failed, retrying as <img>:", error);
+  }
+
+  // Supabase (or any host) may refuse the CORS fetch; a plain <img> often still
+  // works. A tainted canvas is fine here because the panel is only ever used as
+  // a WebGL texture, never read back.
+  try {
+    const image = await loadHologramSignImageElement(url, "anonymous");
+    return image;
+  } catch (_) {
+    /* fall through to the fully permissive attempt */
+  }
+
+  try {
+    return await loadHologramSignImageElement(url, "");
   } catch (error) {
     // A missing image only costs the picture: the text panel still renders.
     console.warn("[Hologram] Could not load sign image:", error);
     return null;
   }
+}
+
+// Repainting the shared canvas in place needs the GPU copy to be flagged, or the
+// panel keeps showing the text-only artwork it was created with.
+function refreshHologramCanvasTexture(el, canvas) {
+  const component = el && el.components ? el.components.material : null;
+  const material = component ? component.material : null;
+  const map = material ? material.map : null;
+  if (map && map.image === canvas) {
+    map.needsUpdate = true;
+    return;
+  }
+  if (el && canvas) el.setAttribute("material", "src", canvas);
 }
 
 function registerHologramSignComponent() {
@@ -4195,19 +4252,23 @@ function registerHologramSignComponent() {
 
     init() {
       const position = this.el.getAttribute("position") || {};
-      this.baseY = Number.isFinite(position.y) ? position.y : 1.6;
+      this.baseY = Number.isFinite(position.y) ? position.y : HOLOGRAM_ROW_Y;
       this.phase = this.data.index * 1.9 + 0.4;
       this.panelMaterial = null;
       this.glowMaterial = null;
       this.destroyed = false;
+      this.imageRequest = 0;
 
-      const texture = drawHologramSignCanvas({
+      // Both planes share one canvas that is repainted in place when the photo
+      // arrives, so the picture lands without swapping textures mid-flight.
+      this.canvas = drawHologramSignCanvas({
         title: this.data.title,
         text: this.data.text,
         image: null,
         index: this.data.index,
         total: this.data.total,
-      }).toDataURL("image/png");
+      });
+      const texture = this.canvas;
 
       this.panelEl = document.createElement("a-plane");
       this.panelEl.setAttribute("width", HOLOGRAM_PANEL_WIDTH);
@@ -4253,17 +4314,21 @@ function registerHologramSignComponent() {
     },
 
     async applyImage(url) {
+      const request = (this.imageRequest += 1);
       const image = await loadHologramSignImage(url);
-      if (!image || this.destroyed || !this.panelEl || !this.glowEl) return;
-      const texture = drawHologramSignCanvas({
+      if (!image || this.destroyed || request !== this.imageRequest) return;
+      drawHologramSignCanvas({
         title: this.data.title,
         text: this.data.text,
         image,
         index: this.data.index,
         total: this.data.total,
-      }).toDataURL("image/png");
-      this.panelEl.setAttribute("material", "src", texture);
-      this.glowEl.setAttribute("material", "src", texture);
+        canvas: this.canvas,
+      });
+      refreshHologramCanvasTexture(this.panelEl, this.canvas);
+      refreshHologramCanvasTexture(this.glowEl, this.canvas);
+      this.panelMaterial = null;
+      this.glowMaterial = null;
     },
 
     tick(time) {
