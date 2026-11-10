@@ -3901,13 +3901,13 @@ window.addEventListener("resize", () => {
 // glass. Two planes share the texture: a crisp panel and an additive
 // copy behind it that bleeds light like a projector.
 // -------------------------------------------------------------------
-// A placard is laid out in an art space — 1024×512 for the wide arrangement —
-// and rasterised at 1.5× that size, so a panel that fills most of the screen
-// still shows crisp type. The two art spaces themselves live in
-// HOLOGRAM_SIGN_LAYOUTS, right above the painter that reads them.
+// The artwork is laid out in a 1024×512 space and rasterised at 1.5× that size,
+// so a panel that now fills most of the screen still shows crisp type.
 const HOLOGRAM_ART_WIDTH = 1024;
 const HOLOGRAM_ART_HEIGHT = 512;
 const HOLOGRAM_TEX_SCALE = 1.5;
+const HOLOGRAM_TEX_WIDTH = HOLOGRAM_ART_WIDTH * HOLOGRAM_TEX_SCALE;
+const HOLOGRAM_TEX_HEIGHT = HOLOGRAM_ART_HEIGHT * HOLOGRAM_TEX_SCALE;
 const HOLOGRAM_FONT = "'Segoe UI', system-ui, -apple-system, sans-serif";
 const HOLOGRAM_PANEL_WIDTH = 1.5;
 const HOLOGRAM_PANEL_HEIGHT = 0.75;
@@ -4087,71 +4087,24 @@ function hologramWrapText(ctx, text, maxWidth, maxLines) {
   return trimmed;
 }
 
-// Two arrangements of the same placard. The floating panels are 2:1 planes, so
-// they always use the wide one; the focused reader picks whichever fills the
-// glass — a wide window gets the placard it was designed as, while a phone held
-// upright gets a tall placard with the photo as a banner, which is both larger
-// on screen and much easier to read at arm's length.
-const HOLOGRAM_SIGN_LAYOUTS = {
-  landscape: {
-    width: 1024,
-    height: 512,
-    gutter: 52,
-    headerFont: 22,
-    footerFont: 20,
-    bracket: 34,
-    sheen: 150,
-    image: { x: 52, y: 138, width: 288, height: 288 },
-    body: {
-      withImage: { top: 140, bottom: 430, left: 372, right: 972, font: 36, lineHeight: 46, maxLines: 5 },
-      plain: { top: 140, bottom: 430, left: 52, right: 972, font: 44, lineHeight: 58, maxLines: 4 },
-    },
-  },
-  portrait: {
-    width: 720,
-    height: 1120,
-    gutter: 52,
-    headerFont: 26,
-    footerFont: 24,
-    bracket: 40,
-    sheen: 220,
-    image: { x: 52, y: 138, width: 616, height: 420 },
-    body: {
-      withImage: { top: 604, bottom: 1038, left: 52, right: 668, font: 40, lineHeight: 56, maxLines: 7 },
-      plain: { top: 140, bottom: 1038, left: 52, right: 668, font: 52, lineHeight: 74, maxLines: 11 },
-    },
-  },
-};
-
-function hologramSignLayout(name) {
-  return HOLOGRAM_SIGN_LAYOUTS[name] || HOLOGRAM_SIGN_LAYOUTS.landscape;
-}
-
-function drawHologramSignCanvas({ title, text, image, index, total, canvas: target, layout: layoutName }) {
-  const layout = hologramSignLayout(layoutName);
-  const artW = layout.width;
-  const artH = layout.height;
+function drawHologramSignCanvas({ title, text, image, index, total, canvas: target }) {
   const canvas = target || document.createElement("canvas");
-  const textureW = Math.round(artW * HOLOGRAM_TEX_SCALE);
-  const textureH = Math.round(artH * HOLOGRAM_TEX_SCALE);
-  if (canvas.width !== textureW) canvas.width = textureW;
-  if (canvas.height !== textureH) canvas.height = textureH;
+  if (canvas.width !== HOLOGRAM_TEX_WIDTH) canvas.width = HOLOGRAM_TEX_WIDTH;
+  if (canvas.height !== HOLOGRAM_TEX_HEIGHT) canvas.height = HOLOGRAM_TEX_HEIGHT;
   const ctx = canvas.getContext("2d");
   if (!ctx) return canvas;
 
-  // Everything below is drawn in the layout's art space and this transform does
+  // Everything below is drawn in the 1024×512 art space and this transform does
   // the upscaling, so no pixel size in here has to know the texture size.
   ctx.setTransform(HOLOGRAM_TEX_SCALE, 0, 0, HOLOGRAM_TEX_SCALE, 0, 0);
 
   const panelX = 20;
   const panelY = 20;
-  const panelW = artW - 40;
-  const panelH = artH - 40;
+  const panelW = HOLOGRAM_ART_WIDTH - 40;
+  const panelH = HOLOGRAM_ART_HEIGHT - 40;
   const radius = 28;
-  const gutter = layout.gutter;
-  const rightEdge = artW - gutter;
 
-  ctx.clearRect(0, 0, artW, artH);
+  ctx.clearRect(0, 0, HOLOGRAM_ART_WIDTH, HOLOGRAM_ART_HEIGHT);
 
   hologramRoundRect(ctx, panelX, panelY, panelW, panelH, radius);
   const body = ctx.createLinearGradient(0, panelY, 0, panelY + panelH);
@@ -4180,28 +4133,27 @@ function drawHologramSignCanvas({ title, text, image, index, total, canvas: targ
     [panelX + 16, panelY + panelH - 16, 1, -1],
     [panelX + panelW - 16, panelY + panelH - 16, -1, -1],
   ];
-  const bracket = layout.bracket;
   ctx.strokeStyle = HOLOGRAM_PALETTE.bracket;
   ctx.lineWidth = 6;
   brackets.forEach(([x, y, sx, sy]) => {
     ctx.beginPath();
-    ctx.moveTo(x, y + sy * bracket);
+    ctx.moveTo(x, y + sy * 34);
     ctx.lineTo(x, y);
-    ctx.lineTo(x + sx * bracket, y);
+    ctx.lineTo(x + sx * 34, y);
     ctx.stroke();
   });
 
   ctx.textBaseline = "alphabetic";
   ctx.textAlign = "left";
-  ctx.font = `600 ${layout.headerFont}px ${HOLOGRAM_FONT}`;
+  ctx.font = `600 22px ${HOLOGRAM_FONT}`;
   ctx.fillStyle = HOLOGRAM_PALETTE.label;
-  hologramLetterSpaced(ctx, "GBR JR. MUSEUM", gutter, 84, 3);
+  hologramLetterSpaced(ctx, "GBR JR. MUSEUM", 52, 84, 3);
   // Just the count: "02 / 03" reads as a placard number, not a product name.
   ctx.fillStyle = HOLOGRAM_PALETTE.labelDim;
   hologramLetterSpaced(
     ctx,
     `${String(index + 1).padStart(2, "0")} / ${String(total).padStart(2, "0")}`,
-    rightEdge,
+    972,
     84,
     3,
     "right"
@@ -4210,52 +4162,51 @@ function drawHologramSignCanvas({ title, text, image, index, total, canvas: targ
   ctx.strokeStyle = HOLOGRAM_PALETTE.rule;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(gutter, 110);
-  ctx.lineTo(rightEdge, 110);
+  ctx.moveTo(52, 110);
+  ctx.lineTo(972, 110);
   ctx.stroke();
 
   const hasImage = !!image;
+  const textLeft = hasImage ? 372 : 52;
+  const textRight = 972;
   if (hasImage) {
-    // Square beside the text when wide, a banner above it when tall.
-    const box = layout.image;
-    const scale = Math.max(box.width / image.width, box.height / image.height);
+    const boxX = 52;
+    const boxY = 138;
+    const boxSize = 288;
+    const scale = Math.max(boxSize / image.width, boxSize / image.height);
     const drawW = image.width * scale;
     const drawH = image.height * scale;
     ctx.save();
-    hologramRoundRect(ctx, box.x, box.y, box.width, box.height, 18);
+    hologramRoundRect(ctx, boxX, boxY, boxSize, boxSize, 18);
     ctx.clip();
-    ctx.drawImage(
-      image,
-      box.x + (box.width - drawW) / 2,
-      box.y + (box.height - drawH) / 2,
-      drawW,
-      drawH
-    );
+    ctx.drawImage(image, boxX + (boxSize - drawW) / 2, boxY + (boxSize - drawH) / 2, drawW, drawH);
     ctx.fillStyle = HOLOGRAM_PALETTE.imageTint;
-    ctx.fillRect(box.x, box.y, box.width, box.height);
+    ctx.fillRect(boxX, boxY, boxSize, boxSize);
     ctx.restore();
     ctx.save();
-    hologramRoundRect(ctx, box.x, box.y, box.width, box.height, 18);
+    hologramRoundRect(ctx, boxX, boxY, boxSize, boxSize, 18);
     ctx.strokeStyle = HOLOGRAM_PALETTE.imageFrame;
     ctx.lineWidth = 3;
     ctx.stroke();
     ctx.restore();
   }
 
-  const column = hasImage ? layout.body.withImage : layout.body.plain;
   ctx.fillStyle = HOLOGRAM_PALETTE.body;
-  ctx.font = `600 ${column.font}px ${HOLOGRAM_FONT}`;
-  const lines = hologramWrapText(ctx, text || title || "Hologram", column.right - column.left, column.maxLines);
+  const bodyFontSize = hasImage ? 36 : 44;
+  ctx.font = `600 ${bodyFontSize}px ${HOLOGRAM_FONT}`;
+  const lines = hologramWrapText(ctx, text || title || "Hologram", textRight - textLeft, hasImage ? 5 : 4);
+  const lineHeight = hasImage ? 46 : 58;
   // Centre the block in the body area so a one-line sign does not float at
   // the top of an otherwise empty panel, and centre each line inside the
   // column so short and long notes share the same axis.
-  const blockHeight = Math.max(0, (lines.length - 1) * column.lineHeight);
-  const firstBaseline =
-    column.top + Math.max(0, (column.bottom - column.top - blockHeight) / 2) + column.font * 0.82;
-  const textCenter = (column.left + column.right) / 2;
+  const bodyTop = 140;
+  const bodyBottom = 430;
+  const blockHeight = Math.max(0, (lines.length - 1) * lineHeight);
+  const firstBaseline = bodyTop + Math.max(0, (bodyBottom - bodyTop - blockHeight) / 2) + bodyFontSize * 0.82;
+  const textCenter = (textLeft + textRight) / 2;
   ctx.textAlign = "center";
   lines.forEach((line, lineIndex) => {
-    ctx.fillText(line, textCenter, firstBaseline + lineIndex * column.lineHeight);
+    ctx.fillText(line, textCenter, firstBaseline + lineIndex * lineHeight);
   });
   // hologramLetterSpaced() places characters itself and assumes left alignment.
   ctx.textAlign = "left";
@@ -4263,19 +4214,15 @@ function drawHologramSignCanvas({ title, text, image, index, total, canvas: targ
   ctx.strokeStyle = HOLOGRAM_PALETTE.ruleFaint;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(gutter, artH - 68);
-  ctx.lineTo(rightEdge, artH - 68);
+  ctx.moveTo(52, 444);
+  ctx.lineTo(972, 444);
   ctx.stroke();
 
   // Footer carries only the artwork title; the corner tag was removed. It starts
   // inside the corner bracket so the two never overlap.
-  ctx.font = `600 ${layout.footerFont}px ${HOLOGRAM_FONT}`;
+  ctx.font = `600 20px ${HOLOGRAM_FONT}`;
   ctx.fillStyle = HOLOGRAM_PALETTE.labelDim;
-  ctx.fillText(
-    hologramClipText(ctx, title || "", artW - (gutter + 28) * 2),
-    gutter + 28,
-    artH - 36
-  );
+  ctx.fillText(hologramClipText(ctx, title || "", 848), 80, 476);
 
   // Scanlines and a top sheen, clipped to the frame.
   ctx.save();
@@ -4285,11 +4232,11 @@ function drawHologramSignCanvas({ title, text, image, index, total, canvas: targ
   for (let y = panelY; y < panelY + panelH; y += 4) {
     ctx.fillRect(panelX, y, panelW, 1);
   }
-  const sheen = ctx.createLinearGradient(0, panelY, 0, panelY + layout.sheen);
+  const sheen = ctx.createLinearGradient(0, panelY, 0, panelY + 150);
   sheen.addColorStop(0, HOLOGRAM_PALETTE.sheenTop);
   sheen.addColorStop(1, HOLOGRAM_PALETTE.sheenBottom);
   ctx.fillStyle = sheen;
-  ctx.fillRect(panelX, panelY, panelW, layout.sheen);
+  ctx.fillRect(panelX, panelY, panelW, 150);
   ctx.restore();
 
   return canvas;
@@ -4605,86 +4552,17 @@ if (btnImmersiveSigns) {
 const holoReader = document.getElementById("holo-reader");
 const holoReaderCanvas = document.getElementById("holo-reader-canvas");
 const btnHoloReaderBack = document.getElementById("btn-holo-reader-back");
-const btnHoloReaderOrientation = document.getElementById("btn-holo-reader-orientation");
 
 const HOLOGRAM_TAP_SLOP = 12; // pixels of travel still counted as a tap
 const HOLOGRAM_TAP_MS = 900; // long enough for a deliberate touch, short enough to reject a hold
 
-// The reader will not draw a wide placard into a tall window: in "auto" it reads
-// the glass the visitor is actually looking through, so rotating the phone
-// re-lays out the sign even with rotation lock on. The two pinned modes are for
-// the cases where the window's shape and the device in hand disagree — a desktop
-// monitor — or for a visitor who simply prefers the tall placard either way.
-const HOLOGRAM_READER_ORIENTATION_KEY = "gbr-holo-reader-orientation";
-const HOLOGRAM_READER_ORIENTATION_MODES = ["auto", "landscape", "portrait"];
-const HOLOGRAM_READER_ORIENTATION_LABELS = {
-  auto: "⟳ Auto",
-  landscape: "▭ Landscape",
-  portrait: "▯ Portrait",
-};
-const HOLOGRAM_READER_ORIENTATION_HINTS = {
-  auto: "Sign orientation: auto, following how the device is held. Tap to pin it landscape.",
-  landscape: "Sign orientation: pinned landscape. Tap to pin it portrait.",
-  portrait: "Sign orientation: pinned portrait. Tap to follow the device again.",
-};
-
 let hologramReaderOpen = false;
 let hologramReaderSign = null;
-let hologramReaderOrientationMode = readHologramReaderOrientation();
-let hologramReaderDrawnLayout = "";
 let hologramTapStart = null;
 let hologramHoverFrame = 0;
 
-function readHologramReaderOrientation() {
-  try {
-    const stored = window.localStorage.getItem(HOLOGRAM_READER_ORIENTATION_KEY);
-    if (HOLOGRAM_READER_ORIENTATION_MODES.indexOf(stored) !== -1) return stored;
-  } catch (_) {
-    /* Private browsing: the choice just will not survive a reload. */
-  }
-  return "auto";
-}
-
-function storeHologramReaderOrientation(mode) {
-  try {
-    window.localStorage.setItem(HOLOGRAM_READER_ORIENTATION_KEY, mode);
-  } catch (_) {
-    /* Storage full or blocked: the choice still applies to this visit. */
-  }
-}
-
-// Which arrangement the sign should be painted in right now.
-function hologramReaderLayoutName() {
-  if (hologramReaderOrientationMode === "portrait") return "portrait";
-  if (hologramReaderOrientationMode === "landscape") return "landscape";
-  return window.innerWidth > window.innerHeight ? "landscape" : "portrait";
-}
-
-function updateHologramReaderOrientationButton() {
-  if (!btnHoloReaderOrientation) return;
-  const mode = hologramReaderOrientationMode;
-  const label = HOLOGRAM_READER_ORIENTATION_LABELS[mode] || HOLOGRAM_READER_ORIENTATION_LABELS.auto;
-  if (btnHoloReaderOrientation.textContent !== label) btnHoloReaderOrientation.textContent = label;
-  const hint = HOLOGRAM_READER_ORIENTATION_HINTS[mode];
-  btnHoloReaderOrientation.title = hint;
-  btnHoloReaderOrientation.setAttribute("aria-label", hint);
-  btnHoloReaderOrientation.dataset.mode = mode;
-}
-
-// A quick fade rather than a hard cut, so swapping arrangements in the hand
-// feels like the placard turning over instead of a glitch.
-function animateHologramReaderSwap() {
-  if (!holoReaderCanvas || !holoReaderCanvas.animate) return;
-  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  holoReaderCanvas.animate([{ opacity: 0.35 }, { opacity: 1 }], { duration: 220, easing: "ease-out" });
-}
-
 function drawHologramReaderCanvas(sign) {
   if (!holoReaderCanvas || !sign) return;
-  const layoutName = hologramReaderLayoutName();
-  hologramReaderDrawnLayout = layoutName;
-  // Lets the stylesheet and the harness see which way round the placard is.
-  holoReaderCanvas.dataset.layout = layoutName;
   drawHologramSignCanvas({
     title: sign.title,
     text: sign.text,
@@ -4692,25 +4570,13 @@ function drawHologramReaderCanvas(sign) {
     index: sign.index,
     total: sign.total,
     canvas: holoReaderCanvas,
-    layout: layoutName,
   });
-}
-
-// Repaints only when the arrangement actually changed, so a resize that leaves
-// the layout alone never costs a frame of canvas work.
-function syncHologramReaderOrientation() {
-  updateHologramReaderOrientationButton();
-  if (!hologramReaderSign) return;
-  if (hologramReaderLayoutName() === hologramReaderDrawnLayout) return;
-  drawHologramReaderCanvas(hologramReaderSign);
-  animateHologramReaderSwap();
 }
 
 function openHologramReader(sign) {
   if (!holoReader || !sign) return;
   hologramReaderSign = sign;
   hologramReaderOpen = true;
-  updateHologramReaderOrientationButton();
   drawHologramReaderCanvas(sign);
 
   // The photo usually lands after the panel was built, so the text is painted
@@ -4865,29 +4731,6 @@ if (holoReader) {
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && hologramReaderOpen) closeHologramReader();
 });
-
-if (btnHoloReaderOrientation) {
-  btnHoloReaderOrientation.addEventListener("click", () => {
-    const current = HOLOGRAM_READER_ORIENTATION_MODES.indexOf(hologramReaderOrientationMode);
-    hologramReaderOrientationMode =
-      HOLOGRAM_READER_ORIENTATION_MODES[(current + 1) % HOLOGRAM_READER_ORIENTATION_MODES.length];
-    storeHologramReaderOrientation(hologramReaderOrientationMode);
-    syncHologramReaderOrientation();
-  });
-}
-
-// Rotating the phone, resizing a window, or the browser reporting a new screen
-// orientation all funnel into the same idempotent sync: the sign is repainted
-// only if the arrangement it should use actually changed.
-window.addEventListener("resize", syncHologramReaderOrientation);
-window.addEventListener("orientationchange", syncHologramReaderOrientation);
-if (window.screen && window.screen.orientation && window.screen.orientation.addEventListener) {
-  window.screen.orientation.addEventListener("change", syncHologramReaderOrientation);
-}
-if (window.visualViewport) {
-  window.visualViewport.addEventListener("resize", syncHologramReaderOrientation);
-}
-updateHologramReaderOrientationButton();
 
 if (window.AFRAME) {
   registerHologramSignComponent();
