@@ -3897,44 +3897,74 @@ window.addEventListener("resize", () => {
 // glass. Two planes share the texture: a crisp panel and an additive
 // copy behind it that bleeds light like a projector.
 // -------------------------------------------------------------------
-const HOLOGRAM_TEX_WIDTH = 1024;
-const HOLOGRAM_TEX_HEIGHT = 512;
+// The artwork is laid out in a 1024×512 space and rasterised at 1.5× that size,
+// so a panel that now fills most of the screen still shows crisp type.
+const HOLOGRAM_ART_WIDTH = 1024;
+const HOLOGRAM_ART_HEIGHT = 512;
+const HOLOGRAM_TEX_SCALE = 1.5;
+const HOLOGRAM_TEX_WIDTH = HOLOGRAM_ART_WIDTH * HOLOGRAM_TEX_SCALE;
+const HOLOGRAM_TEX_HEIGHT = HOLOGRAM_ART_HEIGHT * HOLOGRAM_TEX_SCALE;
 const HOLOGRAM_FONT = "'Segoe UI', system-ui, -apple-system, sans-serif";
 const HOLOGRAM_PANEL_WIDTH = 1.5;
 const HOLOGRAM_PANEL_HEIGHT = 0.75;
 
-// The camera sits at the visitor's eyes (y = 1.6) behind A-Frame's default 60°
-// vertical lens, so the horizontal field of view follows the viewport aspect.
-// Sizing the signs in degrees and converting back to metres is what keeps them
-// close to the visitor without sliding off the side of a narrow phone screen.
-const HOLOGRAM_CAMERA_FOV = 60;
-const HOLOGRAM_ROW_Y = 1.62;
-const HOLOGRAM_SIGN_ANGLE = { 1: 54, 2: 32, 3: 24 }; // ideal on-screen width, degrees
-const HOLOGRAM_SIGN_GAP = 3.2; // breathing room between neighbours, degrees
-const HOLOGRAM_MIN_ANGLE = { 1: 30, 2: 15, 3: 9.5 }; // never shrink below this
-const HOLOGRAM_ROW_DISTANCE = { 1: 1.05, 2: 1.2, 3: 1.3 }; // metres from the eyes
+// The camera sits at the visitor's eyes (y = 1.6) behind A-Frame's default lens,
+// which is 80° vertical (not three.js' 60°), so the horizontal field of view
+// follows the viewport aspect. A sign is sized from that lens alone — never from
+// how many signs there are — so adding a second or third sign leaves the first
+// one exactly as large.
+const HOLOGRAM_CAMERA_FOV = 80;
+const HOLOGRAM_ROW_Y = 1.6; // eye height, so the panel sits centred in the view
+const HOLOGRAM_ROW_DISTANCE = 0.8; // metres: arm's length, not across a room
+const HOLOGRAM_SIGN_FILL = 0.95; // share of the horizontal lens one sign takes
+const HOLOGRAM_SIGN_MAX_ANGLE = 84; // degrees: cap once the window is very wide
+const HOLOGRAM_SIGN_MIN_ANGLE = 26; // degrees: floor on a sliver-thin viewport
+const HOLOGRAM_SIGN_GAP = 4; // degrees of breathing room between neighbours
 
-function hologramHorizontalFov() {
-  const width = Math.max(window.innerWidth || 0, 1);
-  const height = Math.max(window.innerHeight || 0, 1);
-  const halfFov = (HOLOGRAM_CAMERA_FOV * Math.PI) / 360;
-  return 2 * Math.atan(Math.tan(halfFov) * (width / height));
+// Size the signs against the lens that actually renders them: the live camera's
+// vertical fov and the renderer canvas' aspect, not the window's. The default
+// A-Frame lens is 80°, not three.js' 60°, and reading it back means a resize or
+// a rotated phone can never leave the panels sized for the previous viewport.
+function hologramLens(sceneEl) {
+  const scene = sceneEl || hologramMountScene;
+  const camera = scene && scene.camera;
+  const canvas = scene && scene.canvas;
+  const fov = camera ? Number(camera.fov) : NaN;
+  const width = canvas ? canvas.clientWidth : 0;
+  const height = canvas ? canvas.clientHeight : 0;
+  return {
+    fov: Number.isFinite(fov) && fov > 10 ? fov : HOLOGRAM_CAMERA_FOV,
+    aspect:
+      width && height
+        ? width / height
+        : Math.max(window.innerWidth || 0, 1) / Math.max(window.innerHeight || 0, 1),
+  };
 }
 
-// One horizontal row, always: every sign shares a height and rides an arc around
-// the visitor so they all stay the same distance away, arm's length and up.
-function hologramRowLayout(count) {
+function hologramHorizontalFov(sceneEl) {
+  const { fov, aspect } = hologramLens(sceneEl);
+  return 2 * Math.atan(Math.tan((fov * Math.PI) / 360) * aspect);
+}
+
+// Width of one sign in degrees, identical whether it stands alone or in a row.
+function hologramSignAngle(sceneEl) {
+  const fov = (hologramHorizontalFov(sceneEl) * 180) / Math.PI;
+  return Math.min(Math.max(fov * HOLOGRAM_SIGN_FILL, HOLOGRAM_SIGN_MIN_ANGLE), HOLOGRAM_SIGN_MAX_ANGLE);
+}
+
+// One horizontal row, always: every sign shares a height, the same short
+// distance and the same size, and extra signs wrap around the visitor's
+// shoulders instead of shrinking. Turning your head brings the rest of the ring
+// into view, which is fine for a gyro-driven hologram.
+function hologramRowLayout(count, sceneEl) {
   const total = Math.max(1, Math.min(Number(count) || 1, MAX_HOLOGRAM_SIGNS));
-  const gap = (HOLOGRAM_SIGN_GAP * Math.PI) / 180;
-  const fov = hologramHorizontalFov();
-  const fitAngle = (fov * 0.94) / total - (total > 1 ? gap : 0);
-  const idealAngle = ((HOLOGRAM_SIGN_ANGLE[total] || 46) * Math.PI) / 180;
-  const minAngle = ((HOLOGRAM_MIN_ANGLE[total] || 13.5) * Math.PI) / 180;
-  const angle = Math.max(Math.min(idealAngle, fitAngle), minAngle);
-  const distance = HOLOGRAM_ROW_DISTANCE[total] || 1.05;
+  const distance = HOLOGRAM_ROW_DISTANCE;
+  const angle = (hologramSignAngle(sceneEl) * Math.PI) / 180;
+  // Neighbours need at least one full panel between their centres or the two
+  // planes cross in mid-air, so the gap is added on top of the sign width.
+  const step = angle + (HOLOGRAM_SIGN_GAP * Math.PI) / 180;
   const width = 2 * distance * Math.tan(angle / 2);
   const scale = width / HOLOGRAM_PANEL_WIDTH;
-  const step = angle + gap;
 
   const spots = [];
   for (let index = 0; index < total; index += 1) {
@@ -3951,13 +3981,15 @@ function hologramRowLayout(count) {
 
 let hologramMountArt = null;
 let hologramMountPortrait = null;
+let hologramMountFov = null;
+let hologramMountScene = null;
 
 function isPortraitViewport() {
   return window.innerHeight >= window.innerWidth;
 }
 
-function hologramLayoutFor(count) {
-  return hologramRowLayout(count);
+function hologramLayoutFor(count, sceneEl) {
+  return hologramRowLayout(count, sceneEl);
 }
 
 let hologramSignEntities = [];
@@ -4031,13 +4063,17 @@ function drawHologramSignCanvas({ title, text, image, index, total, canvas: targ
   const ctx = canvas.getContext("2d");
   if (!ctx) return canvas;
 
+  // Everything below is drawn in the 1024×512 art space and this transform does
+  // the upscaling, so no pixel size in here has to know the texture size.
+  ctx.setTransform(HOLOGRAM_TEX_SCALE, 0, 0, HOLOGRAM_TEX_SCALE, 0, 0);
+
   const panelX = 20;
   const panelY = 20;
-  const panelW = HOLOGRAM_TEX_WIDTH - 40;
-  const panelH = HOLOGRAM_TEX_HEIGHT - 40;
+  const panelW = HOLOGRAM_ART_WIDTH - 40;
+  const panelH = HOLOGRAM_ART_HEIGHT - 40;
   const radius = 28;
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, HOLOGRAM_ART_WIDTH, HOLOGRAM_ART_HEIGHT);
 
   hologramRoundRect(ctx, panelX, panelY, panelW, panelH, radius);
   const body = ctx.createLinearGradient(0, panelY, 0, panelY + panelH);
@@ -4408,10 +4444,12 @@ function mountHologramSigns(art) {
 
   const sceneEl = immersiveContainer.querySelector("a-scene");
   if (!sceneEl) return;
+  hologramMountScene = sceneEl;
 
   const build = () => {
-    const layout = hologramLayoutFor(signs.length);
+    const layout = hologramLayoutFor(signs.length, sceneEl);
     hologramMountPortrait = isPortraitViewport();
+    hologramMountFov = (hologramHorizontalFov(sceneEl) * 180) / Math.PI;
     signs.forEach((sign, index) => {
       const spot = layout[index] || layout[layout.length - 1];
       const entity = document.createElement("a-entity");
@@ -4434,16 +4472,30 @@ function mountHologramSigns(art) {
   else sceneEl.addEventListener("loaded", build, { once: true });
 }
 
-// Turning the phone sideways changes which layout fits, so rebuild the
-// signs once the orientation category actually flips.
-window.addEventListener("resize", () => {
-  if (!hologramSignEntities.length || !hologramMountArt) return;
-  if (isPortraitViewport() === hologramMountPortrait) return;
+// Rotating the phone, or dragging the window wider, changes the lens the signs
+// are sized against, so rebuild them once the horizontal field of view has moved
+// far enough to matter.
+let hologramResizeTimer = null;
+
+function remountHologramSigns() {
   hologramSignEntities.forEach((entity) => {
     if (entity.parentNode) entity.parentNode.removeChild(entity);
   });
   hologramSignEntities = [];
   mountHologramSigns(hologramMountArt);
+}
+
+window.addEventListener("resize", () => {
+  if (!hologramSignEntities.length || !hologramMountArt) return;
+  if (hologramResizeTimer) clearTimeout(hologramResizeTimer);
+  hologramResizeTimer = setTimeout(() => {
+    hologramResizeTimer = null;
+    if (!hologramSignEntities.length || !hologramMountArt) return;
+    const fov = (hologramHorizontalFov(hologramMountScene) * 180) / Math.PI;
+    const staleFov = hologramMountFov === null || Math.abs(fov - hologramMountFov) >= 4;
+    if (!staleFov && isPortraitViewport() === hologramMountPortrait) return;
+    remountHologramSigns();
+  }, 220);
 });
 
 if (btnImmersiveSigns) {
@@ -4499,6 +4551,7 @@ function exitImmersive() {
   }
   immersiveContainer.innerHTML = "";
   hologramSignEntities = [];
+  hologramMountScene = null;
   if (btnImmersiveSigns) btnImmersiveSigns.classList.add("hidden");
   setBgLayerForScreen(false);
   if (currentDetailArtId !== null) openDetail(currentDetailArtId);
