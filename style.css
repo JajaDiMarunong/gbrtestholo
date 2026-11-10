@@ -1576,6 +1576,7 @@ button.corner-fabs-right {
   top: 0; left: 0; right: 0;
   z-index: 12;
   display: flex;
+  gap: 8px;
   padding: max(16px, env(safe-area-inset-top)) 16px 10px;
   pointer-events: none;
 }
@@ -1590,6 +1591,25 @@ button.corner-fabs-right {
 #immersive-container a-scene {
   width: 100%;
   height: 100%;
+}
+/* Hologram sign switch: only rendered when the artwork actually has signs. */
+#btn-immersive-signs {
+  margin-left: auto;
+  border: 1px solid rgba(103, 232, 249, 0.45);
+  color: #a5f3fc;
+  background: rgba(8, 47, 73, 0.55);
+  box-shadow: 0 0 14px rgba(103, 232, 249, 0.25);
+  transition: color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+#btn-immersive-signs[aria-pressed="false"] {
+  color: rgba(244, 241, 234, 0.72);
+  background: rgba(0, 0, 0, 0.5);
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: none;
+}
+#btn-immersive-signs.hidden { display: none; }
+@media (max-width: 360px) {
+  .immersive-topbar .btn-icon { padding: 9px 12px; font-size: 12px; }
 }
 #loading-logo {
   width: 130px;

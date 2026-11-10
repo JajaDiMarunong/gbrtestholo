@@ -118,6 +118,18 @@ const artworkMainInput = document.getElementById("artwork-main");
 const artworkScannableInput = document.getElementById("artwork-scannable");
 const artworkPublishedInput = document.getElementById("artwork-published");
 const artworkHuntInput = document.getElementById("artwork-hunt");
+
+// Hologram sign editor (immersive view only)
+const hologramModal = document.getElementById("hologram-modal");
+const hologramModalTitle = document.getElementById("hologram-modal-title");
+const hologramModalArtwork = document.getElementById("hologram-modal-artwork");
+const hologramModalEnabled = document.getElementById("hologram-modal-enabled");
+const hologramModalList = document.getElementById("hologram-modal-list");
+const hologramModalEmpty = document.getElementById("hologram-modal-empty");
+const hologramModalStatus = document.getElementById("hologram-modal-status");
+const btnAddHologramSign = document.getElementById("btn-add-hologram-sign");
+const btnSaveHolograms = document.getElementById("btn-save-holograms");
+const btnCloseHologramModal = document.getElementById("btn-close-hologram-modal");
 const btnCancelArtworkEdit = document.getElementById("btn-cancel-artwork-edit");
 const btnNewArtwork = document.getElementById("btn-new-artwork");
 const btnCloseArtworkDrawer = document.getElementById("btn-close-artwork-drawer");
@@ -1906,6 +1918,234 @@ function collectQuizFromEditor() {
   return quiz;
 }
 
+// =====================================================================
+// HOLOGRAM SIGNS (immersive view only)
+// Every artwork — built-in or uploaded — can carry up to three panels.
+// They live in artworkSettings/<id>/holograms, the same override record
+// the app already reads for quiz and scavenger-hunt settings, so built-in
+// pieces can be configured without duplicating their artwork records.
+// =====================================================================
+const MAX_HOLOGRAM_SIGNS = 3;
+let hologramEditingArtwork = null;
+
+function sanitizeHologramText(value) {
+  return String(value == null ? "" : value).replace(/\s+/g, " ").trim().slice(0, 280);
+}
+
+function sanitizeHolograms(raw) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const signs = (Array.isArray(source.signs) ? source.signs : [])
+    .map((sign) => {
+      if (!sign || typeof sign !== "object") return null;
+      const text = sanitizeHologramText(sign.text);
+      const imageUrl = typeof sign.imageUrl === "string" && sign.imageUrl.trim() ? sign.imageUrl.trim() : "";
+      return text || imageUrl ? { text, imageUrl } : null;
+    })
+    .filter(Boolean)
+    .slice(0, MAX_HOLOGRAM_SIGNS);
+  return { enabled: source.enabled === true, signs };
+}
+
+function hologramSignMarkup(sign) {
+  const imageUrl = sign.imageUrl || "";
+  return `
+    <div class="hologram-card" data-image-url="${escapeAttr(imageUrl)}" data-image-cleared="0">
+      <div class="hologram-card-head">
+        <span class="hologram-card-label">Sign</span>
+        <button type="button" class="btn-tiny danger hologram-remove-btn">Remove</button>
+      </div>
+      <label class="field-label">Text</label>
+      <textarea class="hologram-text note-textarea" rows="2" maxlength="280" placeholder="Short line shown on the hologram…">${escapeHtml(sign.text || "")}</textarea>
+      <label class="field-label">Image (optional)</label>
+      <div class="hologram-image-row">
+        <input class="hologram-image-input" type="file" accept="image/*" />
+        <button type="button" class="btn-tiny hologram-image-clear${imageUrl ? "" : " hidden"}">Clear image</button>
+      </div>
+      <img class="hologram-image-preview${imageUrl ? "" : " hidden"}"${imageUrl ? ` src="${escapeAttr(imageUrl)}"` : ""} alt="" />
+    </div>`;
+}
+
+function updateHologramEditorState() {
+  if (!hologramModalList) return;
+  const cards = [...hologramModalList.querySelectorAll(".hologram-card")];
+  cards.forEach((card, index) => {
+    const label = card.querySelector(".hologram-card-label");
+    if (label) label.textContent = `Sign ${index + 1}`;
+  });
+  if (hologramModalEmpty) hologramModalEmpty.classList.toggle("hidden", cards.length > 0);
+  if (btnAddHologramSign) btnAddHologramSign.disabled = cards.length >= MAX_HOLOGRAM_SIGNS;
+}
+
+function renderHologramEditor(holograms) {
+  if (!hologramModalList) return;
+  const normalized = sanitizeHolograms(holograms);
+  if (hologramModalEnabled) hologramModalEnabled.checked = normalized.enabled;
+  hologramModalList.innerHTML = normalized.signs.map(hologramSignMarkup).join("");
+  updateHologramEditorState();
+}
+
+function addHologramSignCard() {
+  if (!hologramModalList) return;
+  if (hologramModalList.querySelectorAll(".hologram-card").length >= MAX_HOLOGRAM_SIGNS) return;
+  hologramModalList.insertAdjacentHTML("beforeend", hologramSignMarkup({ text: "", imageUrl: "" }));
+  updateHologramEditorState();
+}
+
+function readHologramsForArtwork(art) {
+  const stored = artworkSettingsCache[art.id]?.holograms;
+  return sanitizeHolograms(stored || art.holograms);
+}
+
+function openHologramEditor(art) {
+  if (!hologramModal || !art) return;
+  hologramEditingArtwork = art;
+  if (hologramModalTitle) hologramModalTitle.textContent = art.name || "Hologram Signs";
+  if (hologramModalArtwork) {
+    hologramModalArtwork.textContent = art.artist || (art._source === "builtin" ? "Built-in artwork" : "Uploaded artwork");
+  }
+  if (hologramModalStatus) {
+    hologramModalStatus.textContent = "";
+    hologramModalStatus.className = "upload-status";
+  }
+  renderHologramEditor(readHologramsForArtwork(art));
+  hologramModal.classList.remove("hidden");
+}
+
+function closeHologramEditor() {
+  if (!hologramModal) return;
+  hologramModal.classList.add("hidden");
+  hologramEditingArtwork = null;
+}
+
+async function collectHologramsFromEditor(artworkId) {
+  if (!hologramModalList) return { enabled: false, signs: [] };
+  const cards = [...hologramModalList.querySelectorAll(".hologram-card")];
+  const signs = [];
+  for (const card of cards) {
+    if (signs.length >= MAX_HOLOGRAM_SIGNS) break;
+    const text = sanitizeHologramText(card.querySelector(".hologram-text")?.value || "");
+    const fileInput = card.querySelector(".hologram-image-input");
+    const file = fileInput?.files?.[0] || null;
+    let imageUrl = card.dataset.imageUrl || "";
+    if (file) {
+      imageUrl = await uploadSupabaseAsset(
+        file,
+        `artworks/${artworkId}/hologram-${signs.length + 1}.${fileExtension(file, "jpg")}`
+      );
+    } else if (card.dataset.imageCleared === "1") {
+      imageUrl = "";
+    }
+    if (!text && !imageUrl) continue;
+    signs.push({ text, imageUrl });
+  }
+  return {
+    enabled: !!(hologramModalEnabled && hologramModalEnabled.checked) && signs.length > 0,
+    signs,
+  };
+}
+
+async function saveHolograms() {
+  if (!hologramEditingArtwork) return;
+  const artworkId = hologramEditingArtwork.id;
+  const user = firebase.auth().currentUser;
+  if (!user) {
+    if (hologramModalStatus) {
+      hologramModalStatus.textContent = "Sign in again before saving hologram signs.";
+      hologramModalStatus.className = "upload-status error";
+    }
+    return;
+  }
+
+  if (btnSaveHolograms) btnSaveHolograms.disabled = true;
+  if (hologramModalStatus) {
+    hologramModalStatus.textContent = "Saving hologram signs…";
+    hologramModalStatus.className = "upload-status";
+  }
+
+  try {
+    const idToken = await user.getIdToken();
+    const holograms = await collectHologramsFromEditor(artworkId);
+    const response = await fetch(
+      `${FIREBASE_URL}/artworkSettings/${encodeURIComponent(artworkId)}.json?auth=${idToken}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ holograms }),
+      }
+    );
+    if (!response.ok) throw new Error(`Firebase returned ${response.status}.`);
+
+    artworkSettingsCache[artworkId] = { ...(artworkSettingsCache[artworkId] || {}), holograms };
+    const cachedArtwork = allArtworksCache.find((item) => item.id === artworkId);
+    if (cachedArtwork) cachedArtwork.holograms = holograms;
+
+    if (hologramModalStatus) {
+      hologramModalStatus.textContent = "Hologram signs saved.";
+      hologramModalStatus.className = "upload-status success";
+    }
+    renderAdminArtworks();
+    setTimeout(closeHologramEditor, 800);
+  } catch (error) {
+    console.error("[Admin] Hologram save failed:", error);
+    if (hologramModalStatus) {
+      hologramModalStatus.textContent = error?.message || "Could not save hologram signs.";
+      hologramModalStatus.className = "upload-status error";
+    }
+  } finally {
+    if (btnSaveHolograms) btnSaveHolograms.disabled = false;
+  }
+}
+
+if (btnAddHologramSign) btnAddHologramSign.addEventListener("click", addHologramSignCard);
+if (btnSaveHolograms) btnSaveHolograms.addEventListener("click", saveHolograms);
+if (btnCloseHologramModal) btnCloseHologramModal.addEventListener("click", closeHologramEditor);
+if (hologramModal) {
+  hologramModal.addEventListener("click", (event) => {
+    if (event.target === hologramModal) closeHologramEditor();
+  });
+}
+if (hologramModalList) {
+  hologramModalList.addEventListener("click", (event) => {
+    const removeButton = event.target.closest(".hologram-remove-btn");
+    if (removeButton) {
+      const card = removeButton.closest(".hologram-card");
+      if (card) card.remove();
+      updateHologramEditorState();
+      return;
+    }
+    const clearButton = event.target.closest(".hologram-image-clear");
+    if (!clearButton) return;
+    const card = clearButton.closest(".hologram-card");
+    const input = card && card.querySelector(".hologram-image-input");
+    if (input) input.value = "";
+    if (card) {
+      card.dataset.imageUrl = "";
+      card.dataset.imageCleared = "1";
+      const preview = card.querySelector(".hologram-image-preview");
+      if (preview) {
+        preview.removeAttribute("src");
+        preview.classList.add("hidden");
+      }
+    }
+    clearButton.classList.add("hidden");
+  });
+  hologramModalList.addEventListener("change", (event) => {
+    const input = event.target.closest(".hologram-image-input");
+    if (!input) return;
+    const card = input.closest(".hologram-card");
+    const file = input.files && input.files[0];
+    if (!card || !file) return;
+    card.dataset.imageCleared = "0";
+    const preview = card.querySelector(".hologram-image-preview");
+    if (preview) {
+      preview.src = URL.createObjectURL(file);
+      preview.classList.remove("hidden");
+    }
+    const clearButton = card.querySelector(".hologram-image-clear");
+    if (clearButton) clearButton.classList.remove("hidden");
+  });
+}
+
 function resetArtworkForm() {
   editingArtworkId = null;
   editingQuizOnly = false;
@@ -2069,6 +2309,7 @@ async function loadAdminArtworks() {
       ...art,
       inScavengerHunt: effectiveHuntStatus(art),
       quiz: sanitizeQuiz(artworkSettingsCache[art.id]?.quiz || art.quiz || []),
+      holograms: sanitizeHolograms(artworkSettingsCache[art.id]?.holograms || art.holograms),
     }));
 
     const validIds = new Set(allArtworksCache.map((art) => art.id));
@@ -2139,6 +2380,7 @@ function renderAdminArtworks() {
             ${art.scannable === false ? "" : `<span class="status-pill">AR</span>`}
             <span class="status-pill ${art.inScavengerHunt ? "hunt" : "muted"}">${art.inScavengerHunt ? "Scavenger hunt" : "Not in hunt"}</span>
             ${art.quiz?.length ? `<span class="status-pill quiz-count">${art.quiz.length} quiz</span>` : `<span class="status-pill muted">No quiz</span>`}
+            ${art.holograms?.signs?.length ? `<span class="status-pill ${art.holograms.enabled ? "holo" : "muted"}">${art.holograms.enabled ? `Holograms ${art.holograms.signs.length}` : "Holograms off"}</span>` : ""}
           </div>
         </div>
         <div class="artwork-row-controls">
@@ -2148,6 +2390,7 @@ function renderAdminArtworks() {
             <span>Hunt</span>
           </label>
           <div class="artwork-row-actions">
+            <button class="btn-tiny artwork-holo-btn" type="button" data-artwork-id="${escapeAttr(art.id)}">Holograms</button>
             <button class="btn-tiny artwork-quiz-btn" type="button" data-artwork-id="${escapeAttr(art.id)}">Quiz</button>
             ${isBuiltin ? "" : `
             <button class="btn-tiny artwork-edit-btn" type="button" data-artwork-id="${escapeAttr(art.id)}">Edit</button>
@@ -2163,6 +2406,12 @@ function renderAdminArtworks() {
     button.addEventListener("click", async () => {
       const artwork = allArtworksCache.find((item) => item.id === button.dataset.artworkId);
       if (artwork) await startArtworkSettingsEdit(artwork);
+    });
+  });
+  adminArtworksList.querySelectorAll(".artwork-holo-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      const artwork = allArtworksCache.find((item) => item.id === button.dataset.artworkId);
+      if (artwork) openHologramEditor(artwork);
     });
   });
   adminArtworksList.querySelectorAll(".artwork-quiz-btn").forEach((button) => {

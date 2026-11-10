@@ -170,6 +170,33 @@ function normalizeQuiz(raw) {
     .filter(Boolean);
 }
 
+// -------------------------------------------------------------------
+// Hologram signs (immersive mode only)
+// An artwork can carry up to three holographic panels. The record lives
+// with the artwork settings and is read only by the immersive scene, so
+// nothing changes on the normal screens.
+// -------------------------------------------------------------------
+const MAX_HOLOGRAM_SIGNS = 3;
+const HOLOGRAM_VISIBILITY_KEY = "museum_holograms_visible";
+
+function normalizeHologramText(value) {
+  return String(value == null ? "" : value).replace(/\s+/g, " ").trim().slice(0, 280);
+}
+
+function normalizeHolograms(raw) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const signs = (Array.isArray(source.signs) ? source.signs : [])
+    .map((sign) => {
+      if (!sign || typeof sign !== "object") return null;
+      const text = normalizeHologramText(sign.text);
+      const imageUrl = typeof sign.imageUrl === "string" && sign.imageUrl.trim() ? sign.imageUrl.trim() : "";
+      return text || imageUrl ? { text, imageUrl } : null;
+    })
+    .filter(Boolean)
+    .slice(0, MAX_HOLOGRAM_SIGNS);
+  return { enabled: source.enabled === true, signs };
+}
+
 function artworkHasQuiz(art) {
   return Array.isArray(art.quiz) && art.quiz.length > 0;
 }
@@ -373,6 +400,7 @@ const screenImmersive = document.getElementById("screen-immersive");
 const immersiveContainer = document.getElementById("immersive-container");
 const btnImmersiveBack = document.getElementById("btn-immersive-back");
 const btnImmersive = document.getElementById("btn-immersive");
+const btnImmersiveSigns = document.getElementById("btn-immersive-signs");
 
 // Browsers decide whether an install prompt is available. Installed launches use
 // the manifest's standalone display mode, which removes browser chrome.
@@ -3558,6 +3586,7 @@ const uploaded = Object.entries(data).map(([key, val]) => ({
           published: val.published !== false,
           inScavengerHunt: val.inScavengerHunt !== false,
           quiz: normalizeQuiz(val.quiz),
+          holograms: normalizeHolograms(val.holograms),
           quizCompleted: false,
         }));
         merged = merged.concat(uploaded);
@@ -3583,6 +3612,7 @@ const uploaded = Object.entries(data).map(([key, val]) => ({
             ...art,
             inScavengerHunt: override !== undefined ? override !== false : art.inScavengerHunt !== false,
             quiz: normalizeQuiz(saved.quiz || art.quiz),
+            holograms: normalizeHolograms(saved.holograms || art.holograms),
             quizCompleted: false,
           };
         });
@@ -3860,6 +3890,510 @@ window.addEventListener("resize", () => {
   }
 });
 // -------------------------------------------------------------------
+// Hologram sign visuals
+// A sign is painted into a canvas and used as the texture of a plane that
+// lives inside the same three.js scene as the skybox, so it keeps real
+// perspective, parallax and depth ordering instead of sitting on the
+// glass. Two planes share the texture: a crisp panel and an additive
+// copy behind it that bleeds light like a projector.
+// -------------------------------------------------------------------
+const HOLOGRAM_TEX_WIDTH = 1024;
+const HOLOGRAM_TEX_HEIGHT = 512;
+const HOLOGRAM_FONT = "'Segoe UI', system-ui, -apple-system, sans-serif";
+const HOLOGRAM_PANEL_WIDTH = 1.5;
+const HOLOGRAM_PANEL_HEIGHT = 0.75;
+
+// Wide screens (tablet landscape / desktop): signs sit in a shallow arc so
+// they read as separate objects floating around the artwork.
+const HOLOGRAM_LAYOUTS = {
+  1: [{ x: 0, y: 1.7, z: -2.2, scale: 1 }],
+  2: [
+    { x: -0.78, y: 1.7, z: -2.15, scale: 0.85 },
+    { x: 0.78, y: 1.7, z: -2.15, scale: 0.85 },
+  ],
+  3: [
+    { x: -0.82, y: 1.6, z: -2.15, scale: 0.78 },
+    { x: 0, y: 2.5, z: -2.7, scale: 0.8 },
+    { x: 0.82, y: 1.6, z: -2.15, scale: 0.78 },
+  ],
+};
+
+// Phones held upright: the horizontal field of view is narrow, so the same
+// signs stack into a column and stay in front of the visitor's eyes.
+const HOLOGRAM_LAYOUTS_PORTRAIT = {
+  1: [{ x: 0, y: 1.7, z: -2.2, scale: 0.82 }],
+  2: [
+    { x: 0, y: 1.42, z: -2.05, scale: 0.72 },
+    { x: 0, y: 2.06, z: -2.3, scale: 0.72 },
+  ],
+  3: [
+    { x: 0, y: 1.26, z: -2.2, scale: 0.6 },
+    { x: 0, y: 1.82, z: -2.35, scale: 0.6 },
+    { x: 0, y: 2.38, z: -2.5, scale: 0.6 },
+  ],
+};
+
+let hologramMountArt = null;
+let hologramMountPortrait = null;
+
+function isPortraitViewport() {
+  return window.innerHeight >= window.innerWidth;
+}
+
+function hologramLayoutFor(count) {
+  const layouts = isPortraitViewport() ? HOLOGRAM_LAYOUTS_PORTRAIT : HOLOGRAM_LAYOUTS;
+  return layouts[count] || layouts[1];
+}
+
+let hologramSignEntities = [];
+
+function hologramRoundRect(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function hologramLetterSpaced(ctx, text, x, y, spacing, align = "left") {
+  const chars = Array.from(String(text));
+  const widths = chars.map((ch) => ctx.measureText(ch).width);
+  const total = widths.reduce((sum, w) => sum + w, 0) + spacing * Math.max(chars.length - 1, 0);
+  let cursor = align === "right" ? x - total : align === "center" ? x - total / 2 : x;
+  chars.forEach((ch, i) => {
+    ctx.fillText(ch, cursor, y);
+    cursor += widths[i] + spacing;
+  });
+}
+
+function hologramClipText(ctx, text, maxWidth) {
+  let value = String(text || "");
+  if (ctx.measureText(value).width <= maxWidth) return value;
+  while (value.length > 1 && ctx.measureText(`${value}…`).width > maxWidth) {
+    value = value.slice(0, -1);
+  }
+  return `${value}…`;
+}
+
+function hologramWrapText(ctx, text, maxWidth, maxLines) {
+  const words = String(text || "").split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = "";
+  let overflow = false;
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index];
+    const candidate = line ? `${line} ${word}` : word;
+    if (ctx.measureText(candidate).width <= maxWidth) {
+      line = candidate;
+      continue;
+    }
+    if (line) lines.push(line);
+    line = word;
+    if (lines.length >= maxLines) {
+      overflow = true;
+      break;
+    }
+  }
+  if (line && lines.length < maxLines) lines.push(line);
+  const trimmed = lines.slice(0, maxLines).map((entry) => hologramClipText(ctx, entry, maxWidth));
+  if (overflow && trimmed.length) {
+    trimmed[trimmed.length - 1] = hologramClipText(ctx, `${trimmed[trimmed.length - 1]}…`, maxWidth);
+  }
+  return trimmed;
+}
+
+function drawHologramSignCanvas({ title, text, image, index, total }) {
+  const canvas = document.createElement("canvas");
+  canvas.width = HOLOGRAM_TEX_WIDTH;
+  canvas.height = HOLOGRAM_TEX_HEIGHT;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return canvas;
+
+  const panelX = 20;
+  const panelY = 20;
+  const panelW = HOLOGRAM_TEX_WIDTH - 40;
+  const panelH = HOLOGRAM_TEX_HEIGHT - 40;
+  const radius = 28;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  hologramRoundRect(ctx, panelX, panelY, panelW, panelH, radius);
+  const body = ctx.createLinearGradient(0, panelY, 0, panelY + panelH);
+  body.addColorStop(0, "rgba(12, 52, 70, 0.88)");
+  body.addColorStop(0.55, "rgba(6, 28, 40, 0.84)");
+  body.addColorStop(1, "rgba(4, 17, 26, 0.9)");
+  ctx.fillStyle = body;
+  ctx.fill();
+
+  // Halo drawn just outside the frame so the panel bleeds light.
+  ctx.save();
+  ctx.strokeStyle = "rgba(103, 232, 249, 0.22)";
+  ctx.lineWidth = 16;
+  hologramRoundRect(ctx, panelX + 2, panelY + 2, panelW - 4, panelH - 4, radius);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.strokeStyle = "rgba(125, 249, 255, 0.85)";
+  ctx.lineWidth = 4;
+  hologramRoundRect(ctx, panelX, panelY, panelW, panelH, radius);
+  ctx.stroke();
+
+  const brackets = [
+    [panelX + 16, panelY + 16, 1, 1],
+    [panelX + panelW - 16, panelY + 16, -1, 1],
+    [panelX + 16, panelY + panelH - 16, 1, -1],
+    [panelX + panelW - 16, panelY + panelH - 16, -1, -1],
+  ];
+  ctx.strokeStyle = "rgba(186, 250, 255, 0.95)";
+  ctx.lineWidth = 6;
+  brackets.forEach(([x, y, sx, sy]) => {
+    ctx.beginPath();
+    ctx.moveTo(x, y + sy * 34);
+    ctx.lineTo(x, y);
+    ctx.lineTo(x + sx * 34, y);
+    ctx.stroke();
+  });
+
+  ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "left";
+  ctx.font = `600 22px ${HOLOGRAM_FONT}`;
+  ctx.fillStyle = "rgba(165, 243, 252, 0.82)";
+  hologramLetterSpaced(ctx, "GBR JR. MUSEUM", 52, 84, 3);
+  ctx.fillStyle = "rgba(165, 243, 252, 0.68)";
+  hologramLetterSpaced(
+    ctx,
+    `HOLOGRAM ${String(index + 1).padStart(2, "0")} / ${String(total).padStart(2, "0")}`,
+    972,
+    84,
+    3,
+    "right"
+  );
+
+  ctx.strokeStyle = "rgba(103, 232, 249, 0.35)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(52, 110);
+  ctx.lineTo(972, 110);
+  ctx.stroke();
+
+  const hasImage = !!image;
+  let textX = 52;
+  if (hasImage) {
+    const boxX = 52;
+    const boxY = 138;
+    const boxSize = 288;
+    const scale = Math.max(boxSize / image.width, boxSize / image.height);
+    const drawW = image.width * scale;
+    const drawH = image.height * scale;
+    ctx.save();
+    hologramRoundRect(ctx, boxX, boxY, boxSize, boxSize, 18);
+    ctx.clip();
+    ctx.drawImage(image, boxX + (boxSize - drawW) / 2, boxY + (boxSize - drawH) / 2, drawW, drawH);
+    ctx.fillStyle = "rgba(8, 47, 73, 0.32)";
+    ctx.fillRect(boxX, boxY, boxSize, boxSize);
+    ctx.restore();
+    ctx.save();
+    hologramRoundRect(ctx, boxX, boxY, boxSize, boxSize, 18);
+    ctx.strokeStyle = "rgba(103, 232, 249, 0.7)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.restore();
+    textX = 372;
+  }
+
+  ctx.fillStyle = "#eafcff";
+  const bodyFontSize = hasImage ? 33 : 40;
+  ctx.font = `600 ${bodyFontSize}px ${HOLOGRAM_FONT}`;
+  const lines = hologramWrapText(ctx, text || title || "Hologram link", 972 - textX, hasImage ? 6 : 5);
+  const lineHeight = hasImage ? 44 : 54;
+  // Centre the block in the body area so a one-line sign does not float at
+  // the top of an otherwise empty panel.
+  const bodyTop = 140;
+  const bodyBottom = 430;
+  const blockHeight = Math.max(0, (lines.length - 1) * lineHeight);
+  const firstBaseline = bodyTop + Math.max(0, (bodyBottom - bodyTop - blockHeight) / 2) + bodyFontSize * 0.82;
+  lines.forEach((line, lineIndex) => {
+    ctx.fillText(line, textX, firstBaseline + lineIndex * lineHeight);
+  });
+
+  ctx.strokeStyle = "rgba(103, 232, 249, 0.24)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(52, 444);
+  ctx.lineTo(972, 444);
+  ctx.stroke();
+
+  ctx.font = `600 20px ${HOLOGRAM_FONT}`;
+  ctx.fillStyle = "rgba(165, 243, 252, 0.72)";
+  ctx.fillText(hologramClipText(ctx, title || "", 640), 52, 476);
+  ctx.textAlign = "right";
+  ctx.fillStyle = "rgba(125, 249, 255, 0.62)";
+  ctx.fillText("◈ AR LINK", 972, 476);
+  ctx.textAlign = "left";
+
+  // Scanlines and a top sheen, clipped to the frame.
+  ctx.save();
+  hologramRoundRect(ctx, panelX, panelY, panelW, panelH, radius);
+  ctx.clip();
+  ctx.fillStyle = "rgba(125, 249, 255, 0.045)";
+  for (let y = panelY; y < panelY + panelH; y += 4) {
+    ctx.fillRect(panelX, y, panelW, 1);
+  }
+  const sheen = ctx.createLinearGradient(0, panelY, 0, panelY + 150);
+  sheen.addColorStop(0, "rgba(125, 249, 255, 0.1)");
+  sheen.addColorStop(1, "rgba(125, 249, 255, 0)");
+  ctx.fillStyle = sheen;
+  ctx.fillRect(panelX, panelY, panelW, 150);
+  ctx.restore();
+
+  return canvas;
+}
+
+async function loadHologramSignImage(url) {
+  if (!url) return null;
+  try {
+    const response = await fetch(url, { credentials: "omit" });
+    if (!response.ok) throw new Error(`status ${response.status}`);
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const image = new Image();
+    try {
+      await new Promise((resolve, reject) => {
+        image.onload = resolve;
+        image.onerror = () => reject(new Error("decode failed"));
+        image.src = objectUrl;
+      });
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+    return image;
+  } catch (error) {
+    // A missing image only costs the picture: the text panel still renders.
+    console.warn("[Hologram] Could not load sign image:", error);
+    return null;
+  }
+}
+
+function registerHologramSignComponent() {
+  if (!window.AFRAME || window.AFRAME.components["hologram-sign"]) return;
+
+  window.AFRAME.registerComponent("hologram-sign", {
+    schema: {
+      text: { type: "string", default: "" },
+      title: { type: "string", default: "" },
+      image: { type: "string", default: "" },
+      index: { type: "int", default: 0 },
+      total: { type: "int", default: 1 },
+    },
+
+    init() {
+      const position = this.el.getAttribute("position") || {};
+      this.baseY = Number.isFinite(position.y) ? position.y : 1.6;
+      this.phase = this.data.index * 1.9 + 0.4;
+      this.panelMaterial = null;
+      this.glowMaterial = null;
+      this.destroyed = false;
+
+      const texture = drawHologramSignCanvas({
+        title: this.data.title,
+        text: this.data.text,
+        image: null,
+        index: this.data.index,
+        total: this.data.total,
+      }).toDataURL("image/png");
+
+      this.panelEl = document.createElement("a-plane");
+      this.panelEl.setAttribute("width", HOLOGRAM_PANEL_WIDTH);
+      this.panelEl.setAttribute("height", HOLOGRAM_PANEL_HEIGHT);
+      this.panelEl.setAttribute("material", {
+        shader: "standard",
+        src: texture,
+        color: "#ffffff",
+        emissive: "#0d2f3c",
+        emissiveIntensity: 0.9,
+        roughness: 1,
+        metalness: 0,
+        transparent: true,
+        opacity: 0.94,
+        side: "double",
+        depthWrite: false,
+        alphaTest: 0.01,
+      });
+
+      this.glowEl = document.createElement("a-plane");
+      this.glowEl.setAttribute("position", "0 0 -0.025");
+      this.glowEl.setAttribute("width", HOLOGRAM_PANEL_WIDTH * 1.05);
+      this.glowEl.setAttribute("height", HOLOGRAM_PANEL_HEIGHT * 1.12);
+      this.glowEl.setAttribute("material", {
+        shader: "standard",
+        src: texture,
+        color: "#67e8f9",
+        emissive: "#0b3a4a",
+        emissiveIntensity: 0.6,
+        roughness: 1,
+        metalness: 0,
+        transparent: true,
+        opacity: 0.34,
+        blending: "additive",
+        side: "double",
+        depthWrite: false,
+      });
+
+      this.el.appendChild(this.glowEl);
+      this.el.appendChild(this.panelEl);
+
+      if (this.data.image) this.applyImage(this.data.image);
+    },
+
+    async applyImage(url) {
+      const image = await loadHologramSignImage(url);
+      if (!image || this.destroyed || !this.panelEl || !this.glowEl) return;
+      const texture = drawHologramSignCanvas({
+        title: this.data.title,
+        text: this.data.text,
+        image,
+        index: this.data.index,
+        total: this.data.total,
+      }).toDataURL("image/png");
+      this.panelEl.setAttribute("material", "src", texture);
+      this.glowEl.setAttribute("material", "src", texture);
+    },
+
+    tick(time) {
+      const object = this.el.object3D;
+      if (!object) return;
+
+      // Yaw-only billboard: the panel always faces the visitor but stays
+      // upright, like a screen mounted on a floating arm.
+      const camera = this.el.sceneEl && this.el.sceneEl.camera;
+      if (camera) {
+        const cameraMatrix = camera.matrixWorld.elements;
+        object.updateMatrixWorld();
+        const signMatrix = object.matrixWorld.elements;
+        const dx = cameraMatrix[12] - signMatrix[12];
+        const dz = cameraMatrix[14] - signMatrix[14];
+        if (dx || dz) object.rotation.y = Math.atan2(dx, dz);
+      }
+
+      object.position.y = this.baseY + Math.sin(time * 0.0011 + this.phase) * 0.012;
+
+      if (!this.panelMaterial && this.panelEl && this.panelEl.components.material) {
+        this.panelMaterial = this.panelEl.components.material.material || null;
+      }
+      if (!this.glowMaterial && this.glowEl && this.glowEl.components.material) {
+        this.glowMaterial = this.glowEl.components.material.material || null;
+      }
+
+      // A slow shimmer plus the rare dropout is what separates a hologram
+      // from a printed panel.
+      const dropout = Math.sin(time * 0.00047 + this.phase * 3.1) > 0.996 ? 0.4 : 1;
+      const shimmer =
+        0.92 + Math.sin(time * 0.005 + this.phase) * 0.05 + Math.sin(time * 0.016 + this.phase * 2) * 0.03;
+      if (this.panelMaterial) this.panelMaterial.opacity = Math.min(1, 0.94 * shimmer * dropout);
+      if (this.glowMaterial) this.glowMaterial.opacity = Math.min(1, 0.36 * shimmer * dropout);
+    },
+
+    remove() {
+      this.destroyed = true;
+    },
+  });
+}
+
+function readHologramPreference() {
+  try {
+    return localStorage.getItem(HOLOGRAM_VISIBILITY_KEY) !== "0";
+  } catch (_) {
+    return true;
+  }
+}
+
+function applyHologramVisibility(visible) {
+  hologramSignEntities.forEach((entity) => {
+    if (entity.object3D) entity.object3D.visible = visible;
+  });
+  if (btnImmersiveSigns) {
+    btnImmersiveSigns.setAttribute("aria-pressed", visible ? "true" : "false");
+    btnImmersiveSigns.textContent = visible ? "◈ Holograms On" : "◈ Holograms Off";
+  }
+}
+
+function setHologramSignsVisible(visible) {
+  applyHologramVisibility(visible);
+  try {
+    localStorage.setItem(HOLOGRAM_VISIBILITY_KEY, visible ? "1" : "0");
+  } catch (_) {
+    /* private mode: the toggle simply forgets between visits */
+  }
+}
+
+function mountHologramSigns(art) {
+  hologramSignEntities = [];
+  hologramMountArt = art;
+  const holograms = normalizeHolograms(art && art.holograms);
+  const signs = holograms.enabled ? holograms.signs : [];
+  if (btnImmersiveSigns) btnImmersiveSigns.classList.toggle("hidden", !signs.length);
+  if (!signs.length) return;
+
+  const sceneEl = immersiveContainer.querySelector("a-scene");
+  if (!sceneEl) return;
+
+  const build = () => {
+    const layout = hologramLayoutFor(signs.length);
+    hologramMountPortrait = isPortraitViewport();
+    signs.forEach((sign, index) => {
+      const spot = layout[index] || layout[layout.length - 1];
+      const entity = document.createElement("a-entity");
+      entity.setAttribute("position", `${spot.x} ${spot.y} ${spot.z}`);
+      entity.setAttribute("scale", `${spot.scale} ${spot.scale} ${spot.scale}`);
+      entity.setAttribute("hologram-sign", {
+        text: sign.text || "",
+        title: (art && art.name) || "",
+        image: sign.imageUrl || "",
+        index,
+        total: signs.length,
+      });
+      sceneEl.appendChild(entity);
+      hologramSignEntities.push(entity);
+    });
+    applyHologramVisibility(readHologramPreference());
+  };
+
+  if (sceneEl.hasLoaded) build();
+  else sceneEl.addEventListener("loaded", build, { once: true });
+}
+
+// Turning the phone sideways changes which layout fits, so rebuild the
+// signs once the orientation category actually flips.
+window.addEventListener("resize", () => {
+  if (!hologramSignEntities.length || !hologramMountArt) return;
+  if (isPortraitViewport() === hologramMountPortrait) return;
+  hologramSignEntities.forEach((entity) => {
+    if (entity.parentNode) entity.parentNode.removeChild(entity);
+  });
+  hologramSignEntities = [];
+  mountHologramSigns(hologramMountArt);
+});
+
+if (btnImmersiveSigns) {
+  btnImmersiveSigns.addEventListener("click", () => {
+    setHologramSignsVisible(btnImmersiveSigns.getAttribute("aria-pressed") !== "true");
+  });
+}
+
+if (window.AFRAME) {
+  registerHologramSignComponent();
+} else {
+  window.addEventListener("load", registerHologramSignComponent, { once: true });
+}
+
+// -------------------------------------------------------------------
 // Immersive Mode (markerless skybox)
 // -------------------------------------------------------------------
 async function startImmersive(art) {
@@ -3886,6 +4420,8 @@ immersiveContainer.innerHTML = `
       <a-light type="directional" color="#ffffff" intensity="0.4" position="-1 2 1"></a-light>
     </a-scene>
   `;
+
+  mountHologramSigns(art);
 }
 function exitImmersive() {
   const immersiveScene = immersiveContainer.querySelector("a-scene");
@@ -3897,6 +4433,8 @@ function exitImmersive() {
     }
   }
   immersiveContainer.innerHTML = "";
+  hologramSignEntities = [];
+  if (btnImmersiveSigns) btnImmersiveSigns.classList.add("hidden");
   setBgLayerForScreen(false);
   if (currentDetailArtId !== null) openDetail(currentDetailArtId);
   else showHome();

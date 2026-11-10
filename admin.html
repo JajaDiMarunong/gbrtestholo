@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="GBR Admin" />
 <link rel="apple-touch-icon" href="./assets/logo.png" />
-<link rel="stylesheet" href="admin.css?v=12" />
+<link rel="stylesheet" href="admin.css?v=13" />
 <script src="asset-manifest.js"></script>
 <script src="offline-store.js?v=1"></script>
 <script>
@@ -719,6 +719,26 @@
     </div>
   </div>
 
+  <div id="hologram-modal" class="modal-overlay hidden">
+    <div class="modal-card hologram-modal-card">
+      <p class="modal-eyebrow">Immersive View</p>
+      <h3 id="hologram-modal-title">Hologram Signs</h3>
+      <p class="modal-desc" id="hologram-modal-artwork">—</p>
+      <p class="field-hint">Up to three holographic panels float in front of the visitor inside Immersive View. Visitors can hide them any time with the Holograms switch.</p>
+      <label class="checkbox-label checkbox-highlight hologram-enable-row">
+        <input id="hologram-modal-enabled" type="checkbox" /> Show hologram signs for this artwork
+      </label>
+      <div id="hologram-modal-list" class="hologram-editor-list"></div>
+      <p id="hologram-modal-empty" class="hologram-editor-empty">No signs yet. Add up to three.</p>
+      <button id="btn-add-hologram-sign" class="btn-secondary btn-small hologram-add-btn" type="button">+ Add Sign</button>
+      <p id="hologram-modal-status" class="upload-status"></p>
+      <div class="modal-actions">
+        <button id="btn-close-hologram-modal" class="btn-secondary" type="button">Close</button>
+        <button id="btn-save-holograms" class="btn-primary" type="button">Save Holograms</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
@@ -739,6 +759,6 @@
     firebase.initializeApp(firebaseConfig);
   </script>
 
-  <script src="admin.js?v=17" defer></script>
+  <script src="admin.js?v=18" defer></script>
 </body>
 </html>

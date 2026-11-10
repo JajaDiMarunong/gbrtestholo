@@ -9,7 +9,7 @@
      4. Bump the ?v= suffix of any CSS file you edited.
    The build number shown on screen is read from the ?v= suffix the browser
    actually loaded, so it can never drift from the deployed files. */
-self.APP_VERSION = "1.5.3";
+self.APP_VERSION = "1.6.0";
 
 const MUSEUM_ASSETS = [
   "./", "./index.html", "./style.css", "./app.js", "./offline-store.js", "./manifest.webmanifest",
