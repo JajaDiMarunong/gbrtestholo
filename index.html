@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+   <script>
+    window.deferredInstallPrompt = null;
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      window.deferredInstallPrompt = e;
+    });
+  </script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>GBR Jr. Museum AR</title>
+<meta name="description" content="Augmented reality digital companion and collection experience for the GBR Jr. Museum." />
+<meta property="og:title" content="GBR Jr. Museum AR" />
+<meta property="og:description" content="Augmented reality digital companion and collection experience for the GBR Jr. Museum." />
+<link rel="stylesheet" href="style.css?v=38" />
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#1a1310" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="apple-touch-icon" href="./assets/logo.png" />
+
+<script src="asset-manifest.js"></script>
+<script src="offline-store.js?v=1"></script>
+<script>
+  (() => {
+    const nativeAtob = window.atob.bind(window);
+    const detectionWorkerMarker = "matchDetection";
+    const strictDetection = "$t=3,Lt=6,Ke=8,Ot=.7";
+    const relaxedDetection = "$t=4,Lt=4,Ke=8,Ot=.8";
+    window.atob = (encoded) => {
+      const decoded = nativeAtob(encoded);
+      return decoded.includes(detectionWorkerMarker) && decoded.includes(strictDetection)
+        ? decoded.replace(strictDetection, relaxedDetection)
+        : decoded;
+    };
+  })();
+</script>
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js" defer></script>
+<script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.0.0/dist/aframe-extras.min.js" defer></script>
+<base target="_blank">
+</head>
+<body>
+
+  <div id="ar-container"></div>
+
+  <div id="home-bg-layer" class="home-bg-layer">
+    <img id="home-bg-img" src="" alt="" />
+    <div class="home-bg-overlay"></div>
+  </div>
+
+  <div id="screen-username" class="modal-overlay">
+    <div class="modal-card">
+      <p class="modal-eyebrow">Welcome</p>
+      <h2>What should we call you?</h2>
+      <p class="modal-desc">This name is used on the leaderboard and on any notes you leave.</p>
+      <input id="username-input" class="text-input" type="text" maxlength="20" placeholder="Your name" />
+      <button id="btn-username-submit" class="btn-primary">Enter Gallery</button>
+    </div>
+  </div>
+
+  <div id="tour-overlay" class="tour-overlay hidden">
+    <div class="tour-card" id="tour-card">
+      <div class="tour-header">
+        <span class="tour-step-count" id="tour-step-count">1 / 7</span>
+        <button id="btn-tour-skip" class="tour-skip">Skip</button>
+      </div>
+      <div class="tour-illustration" id="tour-illustration">
+        <img src="./assets/icons/artwork.webp" alt="" class="tour-illo-img" />
+      </div>
+      <h3 id="tour-title">Welcome</h3>
+      <p id="tour-text" class="tour-text">...</p>
+      <div class="tour-dots" id="tour-dots"></div>
+      <div class="tour-nav">
+        <button id="btn-tour-prev" class="btn-secondary btn-small">← Back</button>
+        <button id="btn-tour-next" class="btn-primary btn-small">Next →</button>
+      </div>
+    </div>
+  </div>
+
+  <section id="screen-home" class="screen hidden">
+    <div class="corner-fabs corner-fabs-left">
+      <button id="btn-open-badges" class="fab-btn" aria-label="Badges" title="Badges">
+        <img src="./assets/icons/badge.webp" alt="Badges" class="fab-icon-img" />
+      </button>
+      <button id="btn-open-library" class="fab-btn" aria-label="Artwork Library" title="Artwork Library">📖</button>
+    </div>
+    <button id="btn-open-settings" class="fab-btn corner-fabs-right">⚙️</button>
+
+    <header class="home-header">
+      <div class="home-logo-wrap">
+        <img class="home-logo" src="./assets/logo.png" alt="GBR Museum" />
+      </div>
+      <div class="home-logo-divider"></div>
+      <p class="sub">Scan artworks on display to unlock their hidden stories.</p>
+      <button id="btn-install-app" class="install-app-btn hidden" type="button">Install Museum App</button>
+      <p id="install-app-hint" class="install-app-hint hidden"></p>
+    </header>
+
+    <div class="progress-row">
+      <div class="progress-track">
+        <div id="progress-fill" class="progress-fill"></div>
+      </div>
+      <span id="progress-label" class="progress-label">0 / 0 unlocked</span>
+      <span id="run-timer" class="run-timer hidden"></span>
+    </div>
+
+    <div class="filter-row">
+      <button id="filter-locked" class="filter-btn" data-filter="locked">🔒 Locked</button>
+      <button id="filter-unlocked" class="filter-btn" data-filter="unlocked">✓ Unlocked</button>
+    </div>
+
+    <div id="filter-toast" class="filter-toast hidden"></div>
+
+    <div class="gallery-scroll">
+      <div class="gallery-grid" id="gallery-grid"></div>
+    </div>
+  </section>
+
+  <section id="screen-scanner" class="screen hidden">
+    <div class="scanner-topbar">
+      <button id="btn-back-home" class="btn-icon">⌂ Home</button>
+    </div>
+
+    <div class="viewfinder">
+      <div class="viewfinder-corner tl"></div>
+      <div class="viewfinder-corner tr"></div>
+      <div class="viewfinder-corner bl"></div>
+      <div class="viewfinder-corner br"></div>
+    </div>
+
+    <div id="scan-hint" class="scan-hint">Point your camera at an artwork</div>
+  </section>
+
+  <section id="screen-detail" class="screen hidden">
+    <div class="detail-topbar">
+      <button id="btn-detail-back" class="btn-icon">← Back</button>
+    </div>
+    <div class="detail-scroll">
+      <div class="detail-hero">
+        <img id="detail-image" src="" alt="" />
+      </div>
+      <div class="detail-body">
+        <p class="eyebrow" id="detail-eyebrow">Unlocked Artwork</p>
+        <h2 id="detail-title">—</h2>
+        <p id="detail-text" class="detail-text">—</p>
+        <button id="btn-learn-more" class="btn-learn">
+          <span class="btn-learn-ico" aria-hidden="true">✦</span> Learn More
+        </button>
+        <p id="quiz-detail-meta" class="quiz-detail-meta hidden">—</p>
+        <button id="btn-take-quiz" class="btn-primary hidden">Take the Quiz</button>
+        <p id="quiz-done-note" class="quiz-done-note hidden">✓ Quiz completed</p>
+        <button id="btn-immersive" class="btn-primary hidden">Enter Immersive View</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-quiz" class="screen hidden">
+    <div class="quiz-topbar">
+      <button id="btn-quiz-back" class="btn-icon">← Back</button>
+      <div class="quiz-progress-wrap">
+        <div id="quiz-progress-track" class="quiz-progress-track" role="progressbar" aria-label="Quiz progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div id="quiz-progress-fill" class="quiz-progress-fill"></div>
+        </div>
+        <span id="quiz-progress" class="quiz-progress">Question 1 of 1</span>
+      </div>
+      <span id="quiz-score" class="quiz-score is-zero" title="Correct answers so far">✓ 0</span>
+    </div>
+
+    <div id="quiz-question-view" class="quiz-question-view">
+      <div id="quiz-body" class="quiz-body">
+        <p id="quiz-artwork" class="quiz-artwork">—</p>
+        <h2 id="quiz-question" class="quiz-question-heading" tabindex="-1">—</h2>
+        <div id="quiz-options" class="quiz-options" role="group" aria-labelledby="quiz-question"></div>
+        <div id="quiz-feedback" class="quiz-feedback hidden" role="status" aria-live="polite">
+          <span id="quiz-feedback-icon" class="quiz-feedback-icon" aria-hidden="true">✓</span>
+          <div class="quiz-feedback-copy">
+            <strong id="quiz-feedback-title">Correct!</strong>
+            <p id="quiz-feedback-text">—</p>
+          </div>
+        </div>
+        <button id="btn-quiz-next" class="btn-primary quiz-next hidden">Next Question</button>
+      </div>
+    </div>
+
+    <div id="quiz-result-view" class="quiz-result-view hidden" tabindex="-1">
+      <div class="quiz-result-inner">
+        <div class="quiz-ring-wrap">
+          <svg class="quiz-ring" viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="quiz-ring-track" cx="60" cy="60" r="52" />
+            <circle id="quiz-result-ring" class="quiz-ring-progress" cx="60" cy="60" r="52" />
+          </svg>
+          <span id="quiz-result-percent" class="quiz-result-percent">0%</span>
+        </div>
+        <p id="quiz-result-eyebrow" class="quiz-result-eyebrow">Quiz complete</p>
+        <h2 id="quiz-result-title" class="quiz-result-title" tabindex="-1">—</h2>
+        <p id="quiz-result-score" class="quiz-result-score">—</p>
+        <div id="quiz-result-dots" class="quiz-result-dots"></div>
+        <p id="quiz-result-best" class="quiz-result-best hidden">—</p>
+        <div id="quiz-badge-chips" class="quiz-badge-chips"></div>
+        <div class="quiz-result-actions">
+          <button id="btn-quiz-retake" class="btn-secondary">Retake Quiz</button>
+          <button id="btn-quiz-done" class="btn-primary">Back to Artwork</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="quiz-leave-confirm" class="quiz-leave-confirm hidden">
+      <div class="quiz-leave-card">
+        <h3>Leave the quiz?</h3>
+        <p>Your answers so far won't be saved. Finish it to record a score and collect its badge.</p>
+        <div class="quiz-leave-actions">
+          <button id="btn-quiz-stay" class="btn-secondary">Keep Going</button>
+          <button id="btn-quiz-leave" class="btn-primary">Leave Quiz</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-library" class="screen hidden">
+    <div class="detail-topbar">
+      <button id="btn-library-back" class="btn-icon">← Back</button>
+    </div>
+    <div class="detail-scroll">
+      <div class="detail-body">
+        <p class="eyebrow">Low-Data Mode</p>
+        <h2>Artwork Library</h2>
+        <p class="detail-text">Browse every artwork's photo and description here — no camera or 3D required. Handy on lower-end devices or slow connections.</p>
+        <div id="library-list" class="library-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-settings" class="screen hidden">
+    <div class="detail-topbar">
+      <button id="btn-settings-back" class="btn-icon">← Back</button>
+    </div>
+    <div class="detail-scroll">
+      <div class="detail-body">
+        <p class="eyebrow">Settings</p>
+        <h2>Options</h2>
+
+        <div class="settings-row" id="settings-change-name">
+          <div>
+            <h4>Change Display Name</h4>
+            <p id="settings-current-name">Currently: —</p>
+          </div>
+          <span class="settings-arrow">›</span>
+        </div>
+
+        <div class="settings-row" id="settings-replay-tutorial">
+          <div>
+            <h4>Replay Tutorial</h4>
+            <p>See the how-to-use walkthrough again</p>
+          </div>
+          <span class="settings-arrow">›</span>
+        </div>
+
+        <div class="settings-row settings-row-static">
+          <div>
+            <h4>App Version</h4>
+            <p id="settings-version-text">—</p>
+            <p id="settings-update-status" class="settings-update-status"></p>
+          </div>
+          <button id="btn-check-updates" class="btn-secondary btn-small" type="button">Check</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-badges" class="screen hidden">
+    <div class="detail-topbar">
+      <button id="btn-badges-back" class="btn-icon">← Back</button>
+    </div>
+    <div class="detail-scroll">
+      <div class="detail-body">
+        <p class="eyebrow" style="display:inline-flex;align-items:center;gap:6px;"><img src="./assets/icons/badge.webp" alt="" class="eyebrow-icon-img" /> Your Progress</p>
+        <h2>Badges</h2>
+        <p class="detail-text">Complete actions around the gallery to earn badges. Collect them all to unlock the guestbook on the Leaderboard tab.</p>
+        <div id="badges-grid" class="badges-grid"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-leaderboard" class="screen hidden">
+    <div class="detail-topbar">
+      <h2 class="leaderboard-title">Leaderboard</h2>
+    </div>
+    <div class="leaderboard-split">
+      <div class="leaderboard-half">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <p class="eyebrow" style="margin:0;display:inline-flex;align-items:center;gap:6px;"><img src="./assets/icons/leaderboard.webp" alt="" class="eyebrow-icon-img" /> Fastest Completions</p>
+          <a href="guestbook.html" class="btn-tiny" style="text-decoration:none;display:inline-flex;align-items:center;">📋 Full View →</a>
+        </div>
+        <div id="leaderboard-list" class="leaderboard-list">
+          <p class="leaderboard-status">Loading…</p>
+        </div>
+      </div>
+      <div class="leaderboard-half notes-half">
+        <div class="notes-half-header">
+          <p class="eyebrow">Guestbook Board</p>
+          <div class="notes-board-controls">
+            <button id="btn-board-zoom-out" class="board-zoom-btn">−</button>
+            <button id="btn-board-zoom-reset" class="board-zoom-btn">⤢</button>
+            <button id="btn-board-zoom-in" class="board-zoom-btn">+</button>
+          </div>
+        </div>
+        <div id="notes-board-wrap" class="notes-board-wrap">
+          <div id="notes-board" class="notes-board"></div>
+        </div>
+        <button id="btn-new-note" class="btn-primary hidden">+ New Note</button>
+        <p id="notes-locked-msg" class="notes-locked-msg">Complete all badges to add a note to the board.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-immersive" class="screen hidden">
+    <div class="immersive-topbar">
+      <button id="btn-immersive-back" class="btn-icon">← Exit Immersive</button>
+    </div>
+    <div id="immersive-container"></div>
+  </section>
+
+  <nav id="bottom-nav" class="bottom-nav hidden">
+    <button class="nav-btn active" data-tab="home">
+      <span class="nav-icon"><img src="./assets/icons/artwork.webp" alt="Artworks" class="nav-icon-img" /></span><span class="nav-label">Artworks</span>
+    </button>
+    <button class="nav-btn" data-tab="scanner">
+      <span class="nav-icon"><img src="./assets/icons/arcamera.webp" alt="AR Camera" class="nav-icon-img" /></span><span class="nav-label">AR Camera</span>
+    </button>
+    <button class="nav-btn" data-tab="leaderboard">
+      <span class="nav-icon"><img src="./assets/icons/leaderboard.webp" alt="Leaderboard" class="nav-icon-img" /></span><span class="nav-label">Leaderboard</span>
+    </button>
+  </nav>
+
+  <div id="library-detail-modal" class="modal-overlay hidden">
+    <div class="modal-card library-detail-card">
+      <div class="library-detail-scroll">
+        <div class="library-detail-hero">
+          <img id="library-detail-image" src="" alt="" />
+        </div>
+        <div class="library-detail-body">
+          <div class="library-card-title-row">
+            <h2 id="library-detail-title">—</h2>
+            <span id="library-detail-badge" class="model-badge hidden">🧊 3D Model</span>
+          </div>
+
+          <div id="library-detail-meta" class="library-detail-meta">
+            <div class="meta-row" id="meta-row-artist">
+              <span class="meta-label">Created by</span>
+              <span id="meta-artist" class="meta-value">—</span>
+            </div>
+            <div class="meta-row" id="meta-row-year">
+              <span class="meta-label">Created in</span>
+              <span id="meta-year" class="meta-value">—</span>
+            </div>
+            <div class="meta-row" id="meta-row-location">
+              <span class="meta-label">Location</span>
+              <span id="meta-location" class="meta-value">—</span>
+            </div>
+          </div>
+
+          <p class="library-detail-section-label">About This Piece</p>
+          <p id="library-detail-text" class="detail-text">—</p>
+
+          <button id="btn-learn-more-library" class="btn-learn">
+            <span class="btn-learn-ico" aria-hidden="true">✦</span> Learn More
+          </button>
+        </div>
+      </div>
+      <div class="library-detail-footer">
+        <button id="btn-library-detail-close" class="btn-primary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="learn-modal" class="modal-overlay hidden">
+    <div class="modal-card learn-card" role="dialog" aria-modal="true" aria-labelledby="learn-title">
+      <div class="learn-head">
+        <p class="modal-eyebrow">From Around the Web</p>
+        <h2 id="learn-title">Learn More</h2>
+        <p id="learn-artwork" class="learn-artwork">—</p>
+      </div>
+
+      <div class="learn-scroll">
+        <div id="learn-status" class="learn-status" role="status" aria-live="polite">
+          <span class="learn-spinner" aria-hidden="true"></span>
+          <span id="learn-status-text">Searching the web…</span>
+        </div>
+
+        <div id="learn-body" class="learn-body hidden">
+          <p id="learn-summary" class="learn-summary"></p>
+          <div id="learn-facts" class="learn-facts hidden"></div>
+          <p id="learn-caution" class="learn-caution hidden"></p>
+
+          <p id="learn-sources-label" class="library-detail-section-label hidden">Sources</p>
+          <ul id="learn-sources" class="learn-sources hidden"></ul>
+        </div>
+      </div>
+
+      <p class="learn-disclaimer">
+        Written automatically from public web pages. Some sources may not be verified —
+        please check with museum staff before citing.
+      </p>
+
+      <div class="learn-actions">
+        <button id="btn-learn-retry" class="btn-secondary hidden">Try Again</button>
+        <button id="btn-learn-close" class="btn-primary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="note-editor-modal" class="modal-overlay hidden">
+    <div class="modal-card note-editor-card">
+      <p id="note-editor-eyebrow" class="modal-eyebrow">Your Notepad</p>
+      <h2 id="note-editor-heading">Leave Your Mark</h2>
+
+      <div class="note-type-tabs">
+        <button class="note-tab active" data-mode="text">✏️ Type</button>
+        <button class="note-tab" data-mode="draw">🎨 Draw</button>
+        <button class="note-tab" data-mode="photo">📷 Photo</button>
+      </div>
+
+      <div id="note-color-swatches" class="note-color-swatches"></div>
+
+      <textarea id="note-text-input" class="note-textarea" maxlength="120" placeholder="I was here…"></textarea>
+
+      <div id="note-draw-wrap" class="note-draw-wrap hidden">
+        <canvas id="note-canvas" width="240" height="240"></canvas>
+        <button id="btn-clear-drawing" class="btn-secondary btn-small">Clear Drawing</button>
+      </div>
+
+      <div id="note-photo-wrap" class="note-photo-wrap hidden">
+        <div class="note-photo-frame">
+          <video id="note-photo-preview" autoplay playsinline muted></video>
+          <img id="note-photo-result" class="hidden" alt="Captured photo" />
+        </div>
+        <p id="note-photo-error" class="admin-error hidden">Couldn't open the camera. Check your browser's camera permission and try again.</p>
+        <div class="note-photo-controls">
+          <button id="btn-snap-photo" class="btn-secondary btn-small">📸 Snap Photo</button>
+          <button id="btn-retake-photo" class="btn-secondary btn-small hidden">Retake</button>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="btn-note-delete" class="btn-secondary hidden">Delete</button>
+        <button id="btn-note-cancel" class="btn-secondary">Cancel</button>
+        <button id="btn-note-post" class="btn-primary">Post</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="note-view-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div id="note-view-content" class="note-view-content"></div>
+      <p id="note-view-name" class="modal-desc">—</p>
+      <div class="modal-actions">
+        <button id="btn-note-view-close" class="btn-secondary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <button id="chat-head-btn" class="chat-head-btn hidden" type="button" aria-label="Open AI museum guide" title="Open AI museum guide">
+    <img src="./assets/icons/aichat.webp" alt="Kuya Davon AI Guide" class="chat-head-img" />
+  </button>
+
+  <div id="chat-panel" class="chat-panel hidden">
+    <div class="chat-panel-header">
+      <div>
+        <h3>Kuya Davon</h3>
+        <p>GBR Jr. Museum Guide</p>
+      </div>
+      <button id="btn-chat-close" class="btn-icon">✕</button>
+    </div>
+    <div id="chat-messages" class="chat-messages"></div>
+    <div class="chat-input-row">
+      <input id="chat-input" class="text-input" type="text" placeholder="Ask about an artwork…" maxlength="300" />
+      <button id="btn-chat-send" class="chat-send-btn">➤</button>
+    </div>
+  </div>
+
+  <div id="unlock-modal" class="modal-overlay hidden">
+    <div class="modal-card unlock-card">
+      <div id="unlock-badge" class="modal-badge">✓</div>
+      <p id="unlock-eyebrow" class="modal-eyebrow">Artwork Unlocked</p>
+      <h2 id="modal-title">—</h2>
+      <p id="modal-desc" class="modal-desc">—</p>
+      <div class="modal-actions">
+        <button id="btn-keep-scanning" class="btn-secondary">Keep Exploring</button>
+        <button id="btn-view-collection" class="btn-primary">View Collection</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="badge-unlock-modal" class="modal-overlay hidden">
+    <div class="modal-card badge-unlock-card">
+      <div class="badge-unlock-glow" aria-hidden="true"></div>
+      <div class="badge-unlock-emblem-wrap">
+        <div class="badge-unlock-emblem">
+          <img id="badge-modal-icon" src="./assets/icons/badge.webp" alt="Badge" class="badge-modal-icon-img" />
+        </div>
+      </div>
+      <p class="modal-eyebrow badge-unlock-eyebrow">✦ Badge Unlocked ✦</p>
+      <h2 id="badge-modal-title" class="badge-modal-title">—</h2>
+      <p id="badge-modal-desc" class="modal-desc badge-modal-desc">—</p>
+      <div class="modal-actions">
+        <button id="btn-badge-dismiss" class="btn-secondary">Awesome!</button>
+        <button id="btn-badge-view" class="btn-primary">View Badges</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="unlock-confetti" class="unlock-confetti" aria-hidden="true"></div>
+
+  <div id="badge-toast" class="badge-toast hidden">
+    <span id="badge-toast-icon"><img src="./assets/icons/badge.webp" alt="Badge" class="badge-toast-img" /></span>
+    <span id="badge-toast-text">Badge earned!</span>
+  </div>
+
+<div id="loading-screen" class="loading-screen">
+  <img id="loading-logo" src="./assets/logo.png" alt="GBR Museum" />
+  <div class="loading-progress" role="progressbar" aria-label="Downloading museum for offline use" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+    <div id="loading-progress-fill" class="loading-progress-fill"></div>
+  </div>
+  <p id="loading-text">Preparing the gallery…</p>
+  <p id="loading-progress-text" class="loading-progress-text">Checking offline files…</p>
+</div>
+
+<div id="permission-error" class="permission-error hidden">
+    <h2>Camera access needed</h2>
+    <button id="btn-retry-camera" class="btn-primary">Retry</button>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAqhByx12wmk-fSGdkvZmu9LKlBZbKAy6k",
+      authDomain: "gbrmuseumtest.firebaseapp.com",
+      databaseURL: "https://gbrmuseumtest-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "gbrmuseumtest",
+      storageBucket: "gbrmuseumtest.firebasestorage.app",
+      messagingSenderId: "712998038471",
+      appId: "1:712998038471:web:8fce1f16a87c2dc89247e2",
+      measurementId: "G-ELC6XEQDZR"
+    };
+    firebase.initializeApp(firebaseConfig);
+  </script>
+
+  <script src="app.js?v=51" defer></script>
+</body>
+</html>

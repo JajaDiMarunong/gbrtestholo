@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GBR Museum — Live Guestbook</title>
+<link rel="stylesheet" href="guestbook.css?v=2" />
+<script src="asset-manifest.js"></script>
+<script src="offline-store.js?v=1"></script>
+<base target="_blank">
+</head>
+<body>
+
+  <div class="tv-frame">
+    <header class="tv-header">
+      <div class="tv-brand">
+        <span class="tv-logo">🏛️</span>
+        <div>
+          <h1>GBR Museum</h1>
+          <p class="tv-subtitle">Live Guestbook & Leaderboard</p>
+        </div>
+      </div>
+      <div class="tv-meta">
+        <div class="tv-stat">
+          <span id="stat-notes-count">—</span>
+          <label>Notes</label>
+        </div>
+        <div class="tv-stat">
+          <span id="stat-leaderboard-count">—</span>
+          <label>Completions</label>
+        </div>
+        <div class="tv-clock" id="tv-clock">--:--</div>
+      </div>
+    </header>
+
+    <div class="tv-layout">
+      <div class="tv-board-section">
+        <div class="tv-section-label">
+          <span>📝 Guestbook Board</span>
+          <span class="tv-refresh-hint" id="refresh-hint">Live · refreshing in 5s</span>
+        </div>
+        <div id="notes-board-wrap" class="tv-board-wrap">
+          <div id="notes-board" class="tv-board"></div>
+        </div>
+      </div>
+
+      <div class="tv-sidebar">
+        <div class="tv-section-label">
+          <img src="./assets/icons/leaderboard.webp" alt="" class="section-icon-img" /> Fastest Completions
+        </div>
+        <div id="leaderboard-list" class="tv-leaderboard"></div>
+      </div>
+    </div>
+
+    <div class="tv-ticker">
+      <div class="ticker-content" id="ticker-text">
+        Welcome to the GBR Jr. Museum! Scan artworks with your phone to unlock their stories. Unlock every artwork to leave a note on the guestbook board!
+      </div>
+    </div>
+  </div>
+
+  <div id="note-view-modal" class="modal-overlay hidden">
+    <div class="modal-card tv-modal-card">
+      <div id="note-view-content" class="note-view-content"></div>
+      <p id="note-view-name" class="modal-desc">—</p>
+      <button id="btn-note-view-close" class="btn-primary">Close</button>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAqhByx12wmk-fSGdkvZmu9LKlBZbKAy6k",
+      authDomain: "gbrmuseumtest.firebaseapp.com",
+      databaseURL: "https://gbrmuseumtest-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "gbrmuseumtest",
+      storageBucket: "gbrmuseumtest.firebasestorage.app",
+      messagingSenderId: "712998038471",
+      appId: "1:712998038471:web:8fce1f16a87c2dc89247e2",
+      measurementId: "G-ELC6XEQDZR"
+    };
+    firebase.initializeApp(firebaseConfig);
+  </script>
+
+  <script src="guestbook.js?v=6" defer></script>
+</body>
+</html>

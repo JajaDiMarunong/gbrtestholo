@@ -1,0 +1,25 @@
+{
+  "name": "GBR Museum AR Collection",
+  "short_name": "GBR Museum",
+  "description": "Explore the GBR Museum collection with offline-ready augmented reality.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#1a1310",
+  "theme_color": "#1a1310",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "./assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./assets/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
