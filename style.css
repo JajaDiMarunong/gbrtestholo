@@ -1609,6 +1609,46 @@ button.corner-fabs-right {
   box-shadow: none;
 }
 #btn-immersive-signs.hidden { display: none; }
+/* One-line nudge under the scene, shown for a few seconds the first time the
+   signs appear: they look like something to read, not something to handle, so
+   the drag and the pinch have to be announced once. Never in the way. */
+.immersive-hint {
+  position: absolute;
+  left: 50%;
+  bottom: max(26px, calc(env(safe-area-inset-bottom) + 18px));
+  z-index: 13;
+  margin: 0;
+  padding: 8px 14px;
+  border: 1px solid rgba(201, 168, 118, 0.28);
+  border-radius: 999px;
+  background: rgba(28, 21, 18, 0.78);
+  color: var(--frame-gold);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  pointer-events: none;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.immersive-hint.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+/* The glass belongs to the panels: a drag there is never a page gesture, and a
+   pinched sign is never a browser zoom. */
+#immersive-container,
+#immersive-container canvas {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+/* A-Frame still tags the canvas with its grab cursor, which would promise a
+   camera drag that no longer exists; the sign hover sets its own cursor. */
+#immersive-container canvas {
+  cursor: default;
+}
 /* ---------------- focused hologram sign reader ----------------
    Tapping a panel lifts the same placard onto the glass: the room dims, the
    sign scales up from just under full size, and both fade back out on Back.

@@ -3951,6 +3951,17 @@ const HOLOGRAM_SIGN_FILL = 0.95; // share of the horizontal lens one sign takes
 const HOLOGRAM_SIGN_MAX_ANGLE = 84; // degrees: cap once the window is very wide
 const HOLOGRAM_SIGN_MIN_ANGLE = 26; // degrees: floor on a sliver-thin viewport
 const HOLOGRAM_SIGN_GAP = 4; // degrees of breathing room between neighbours
+// A sign can be dragged anywhere in the room, but never out of it. The shell
+// below keeps every panel at a readable distance, at a height the visitor can
+// look at, and inside a size that still fits on the glass, so a sign can never
+// be flung somewhere it cannot be brought back from.
+const HOLOGRAM_SIGN_MIN_RADIUS = 0.35; // metres from the visitor, horizontally
+const HOLOGRAM_SIGN_MAX_RADIUS = 4;
+const HOLOGRAM_SIGN_MIN_Y = 0.4; // metres above the floor
+const HOLOGRAM_SIGN_MAX_Y = 2.9;
+const HOLOGRAM_SIGN_MIN_SCALE = 0.5; // × the size the layout picked for it
+const HOLOGRAM_SIGN_MAX_SCALE = 2.2;
+const HOLOGRAM_DRAG_SLOP = 6; // pixels of travel before a touch counts as a drag
 
 // Size the signs against the lens that actually renders them: the live camera's
 // vertical fov and the renderer canvas' aspect, not the window's. The default
@@ -4024,6 +4035,28 @@ function hologramLayoutFor(count, sceneEl) {
 }
 
 let hologramSignEntities = [];
+
+// What the visitor has done to each sign, as offsets from the spot the row
+// layout chose: an angle around them, a distance multiplier, a height and a
+// size multiplier. Keeping the intention rather than the raw coordinates is
+// what lets the row be rebuilt for a rotated phone without undoing the drag —
+// and it means every limit is applied in the same place, in applyOffset().
+// The record lives for one visit to Immersive Mode.
+const hologramSignOffsets = new Map();
+
+function hologramSignOffset(index) {
+  const key = Number(index) || 0;
+  let offset = hologramSignOffsets.get(key);
+  if (!offset) {
+    offset = { angle: 0, radius: 1, dy: 0, scale: 1 };
+    hologramSignOffsets.set(key, offset);
+  }
+  return offset;
+}
+
+function resetHologramSignOffsets() {
+  hologramSignOffsets.clear();
+}
 
 function hologramRoundRect(ctx, x, y, width, height, radius) {
   const r = Math.min(radius, width / 2, height / 2);
@@ -4335,8 +4368,20 @@ function registerHologramSignComponent() {
     },
 
     init() {
+      // The spot the row layout picked is kept as the sign's "home": a drag is
+      // recorded as an offset from it, so a rotation can rebuild the row and
+      // still leave every panel where the visitor put it.
       const position = this.el.getAttribute("position") || {};
-      this.baseY = Number.isFinite(position.y) ? position.y : HOLOGRAM_ROW_Y;
+      const scale = this.el.getAttribute("scale") || {};
+      this.homeX = Number.isFinite(position.x) ? position.x : 0;
+      this.homeY = Number.isFinite(position.y) ? position.y : HOLOGRAM_ROW_Y;
+      this.homeZ = Number.isFinite(position.z) ? position.z : -HOLOGRAM_ROW_DISTANCE;
+      this.homeRadius = Math.hypot(this.homeX, this.homeZ) || HOLOGRAM_ROW_DISTANCE;
+      this.homeAngle = Math.atan2(this.homeX, -this.homeZ);
+      this.homeScale = Number.isFinite(scale.x) && scale.x > 0 ? scale.x : 1;
+      this.baseY = this.homeY;
+      this.offsetY = 0;
+      this.needsOffset = true;
       this.phase = this.data.index * 1.9 + 0.4;
       this.panelMaterial = null;
       this.glowMaterial = null;
@@ -4418,9 +4463,33 @@ function registerHologramSignComponent() {
       this.glowMaterial = null;
     },
 
+    // Puts the panel back where the layout plus the visitor's dragging says it
+    // should be. Called on first render, and live while a drag or a pinch is in
+    // progress, so the plane follows the finger instead of the glass.
+    applyOffset() {
+      const object = this.el.object3D;
+      if (!object) return;
+      const offset = hologramSignOffset(this.data.index);
+      const radius = Math.min(
+        HOLOGRAM_SIGN_MAX_RADIUS,
+        Math.max(HOLOGRAM_SIGN_MIN_RADIUS, this.homeRadius * offset.radius)
+      );
+      const angle = this.homeAngle + offset.angle;
+      const y = Math.min(HOLOGRAM_SIGN_MAX_Y, Math.max(HOLOGRAM_SIGN_MIN_Y, this.homeY + offset.dy));
+      // tick() owns the height because it adds the float, so hand it the rest.
+      this.offsetY = y - this.homeY;
+      object.position.set(radius * Math.sin(angle), y, -radius * Math.cos(angle));
+      object.scale.setScalar(this.homeScale * offset.scale);
+    },
+
     tick(time) {
       const object = this.el.object3D;
       if (!object) return;
+
+      if (this.needsOffset) {
+        this.needsOffset = false;
+        this.applyOffset();
+      }
 
       // Yaw-only billboard: the panel always faces the visitor but stays
       // upright, like a screen mounted on a floating arm.
@@ -4434,7 +4503,7 @@ function registerHologramSignComponent() {
         if (dx || dz) object.rotation.y = Math.atan2(dx, dz);
       }
 
-      object.position.y = this.baseY + Math.sin(time * 0.0011 + this.phase) * 0.012;
+      object.position.y = this.baseY + this.offsetY + Math.sin(time * 0.0011 + this.phase) * 0.012;
 
       if (!this.panelMaterial && this.panelEl && this.panelEl.components.material) {
         this.panelMaterial = this.panelEl.components.material.material || null;
@@ -4472,6 +4541,37 @@ function applyHologramVisibility(visible) {
   }
 }
 
+// A one-line nudge, shown for a few seconds the first time signs appear in a
+// visit. The panels look like something to read, not something to handle, so the
+// drag and the pinch have to be announced once and then get out of the way.
+const immersiveHint = document.getElementById("immersive-hint");
+const HOLOGRAM_HINT_TEXT = "Drag a sign to move it · Pinch to resize · Tap to read";
+const HOLOGRAM_HINT_MS = 5200;
+let hologramHintTimer = null;
+let hologramHintShown = false;
+
+function showHologramHint() {
+  if (!immersiveHint || hologramHintShown) return;
+  hologramHintShown = true;
+  immersiveHint.textContent = HOLOGRAM_HINT_TEXT;
+  immersiveHint.classList.add("is-visible");
+  if (hologramHintTimer) clearTimeout(hologramHintTimer);
+  hologramHintTimer = setTimeout(hideHologramHint, HOLOGRAM_HINT_MS);
+}
+
+function hideHologramHint() {
+  if (hologramHintTimer) {
+    clearTimeout(hologramHintTimer);
+    hologramHintTimer = null;
+  }
+  if (immersiveHint) immersiveHint.classList.remove("is-visible");
+}
+
+function resetHologramHint() {
+  hologramHintShown = false;
+  hideHologramHint();
+}
+
 function mountHologramSigns(art) {
   hologramSignEntities = [];
   hologramMountArt = art;
@@ -4504,6 +4604,7 @@ function mountHologramSigns(art) {
       hologramSignEntities.push(entity);
     });
     applyHologramVisibility(hologramSignsVisible);
+    showHologramHint();
   };
 
   if (sceneEl.hasLoaded) build();
@@ -4658,23 +4759,200 @@ function hologramSignAtPoint(clientX, clientY) {
   return index >= 0 ? owners[index] : null;
 }
 
+// -------------------------------------------------------------------
+// Handling a sign: drag it around the room, pinch it bigger or smaller
+// A panel floats in the room, so a drag has to move it through the room rather
+// than across the glass: one pixel of fingertip travel is as many metres as the
+// panel's own depth makes it, which is what makes the panel feel held. Sideways
+// it sweeps around the visitor at its present distance, up and down it rides
+// world-up so it stays a standing placard and never tilts, and the yaw billboard
+// in tick() keeps it facing them the whole way.
+// -------------------------------------------------------------------
+let hologramDrag = null; // the panel one finger is moving
+let hologramPinch = null; // the panel two fingers are resizing
+const hologramPointers = new Map(); // pointerId → the finger's last position
+
+function hologramClamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+// Screen pixels → metres at a given depth, read from the live lens so a panel
+// tracks the finger the same way on any screen or window shape.
+function hologramMetersPerPixel(depth, sceneEl) {
+  const { fov } = hologramLens(sceneEl);
+  const canvas = sceneEl && sceneEl.canvas;
+  const height = (canvas && canvas.clientHeight) || window.innerHeight || 1;
+  return (2 * Math.max(depth, 0.2) * Math.tan((fov * Math.PI) / 360)) / height;
+}
+
+function hologramPointerSpread() {
+  const points = Array.from(hologramPointers.values());
+  if (points.length < 2) return 0;
+  return Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+}
+
+function hologramSignComponentAt(clientX, clientY) {
+  const entity = hologramSignAtPoint(clientX, clientY);
+  const component = entity && entity.components && entity.components["hologram-sign"];
+  return component || null;
+}
+
+// One finger: the panel follows it, then the offset it lands on is clamped into
+// the shell the visitor can always see and reach.
+function dragHologramSign(event) {
+  const drag = hologramDrag;
+  const sceneEl = hologramMountScene;
+  const camera = sceneEl && sceneEl.camera;
+  const THREE = window.AFRAME && window.AFRAME.THREE;
+  if (!drag || !camera || !THREE) return;
+
+  const dx = event.clientX - drag.x;
+  const dy = event.clientY - drag.y;
+  drag.x = event.clientX;
+  drag.y = event.clientY;
+  if (!dx && !dy) return;
+
+  const component = drag.component;
+  const object = drag.entity && drag.entity.object3D;
+  if (!object || !component) return;
+
+  const cameraPosition = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
+  // A camera looks down its own -Z, so the forward axis is that column negated.
+  const forward = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 2).negate();
+  const depth = new THREE.Vector3(object.position.x, object.position.y, object.position.z)
+    .sub(cameraPosition)
+    .dot(forward);
+  const perPixel = hologramMetersPerPixel(depth, sceneEl);
+
+  // Only the level part of the camera's right axis is used: with the phone
+  // tilted down at the floor, dragging sideways must still sweep the panel
+  // across the room instead of pushing it into the floor.
+  const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+  right.y = 0;
+  if (right.lengthSq() < 1e-8) right.set(1, 0, 0);
+  right.normalize();
+
+  const offset = hologramSignOffset(component.data.index);
+  const movedX = object.position.x + right.x * dx * perPixel;
+  const movedZ = object.position.z + right.z * dx * perPixel;
+  const radius = hologramClamp(Math.hypot(movedX, movedZ), HOLOGRAM_SIGN_MIN_RADIUS, HOLOGRAM_SIGN_MAX_RADIUS);
+  offset.angle = Math.atan2(movedX, -movedZ) - component.homeAngle;
+  offset.radius = radius / component.homeRadius;
+
+  const height = hologramClamp(
+    component.homeY + component.offsetY - dy * perPixel,
+    HOLOGRAM_SIGN_MIN_Y,
+    HOLOGRAM_SIGN_MAX_Y
+  );
+  offset.dy = height - component.homeY;
+
+  component.applyOffset();
+  hideHologramHint();
+}
+
+// Two fingers: always a resize, never an open, and it ends whatever the first
+// finger had started so the panel cannot be dragged and scaled at once.
+function startHologramPinch() {
+  const points = Array.from(hologramPointers.values());
+  hologramTapStart = null;
+  if (hologramDrag) hologramDrag.moved = true;
+
+  const spread = hologramPointerSpread();
+  const component =
+    (hologramDrag && hologramDrag.component) ||
+    hologramSignComponentAt(points[1].x, points[1].y) ||
+    hologramSignComponentAt(points[0].x, points[0].y) ||
+    hologramSignComponentAt((points[0].x + points[1].x) / 2, (points[0].y + points[1].y) / 2);
+  if (!component || spread < 12) {
+    hologramPinch = null;
+    return;
+  }
+  hologramPinch = {
+    component,
+    startSpread: spread,
+    // Measured against the size the layout gave the panel, so the limits mean
+    // the same thing whether the visitor pinched a near sign or a far one.
+    startScale: hologramSignOffset(component.data.index).scale,
+  };
+  hideHologramHint();
+}
+
+function updateHologramPinch() {
+  const pinch = hologramPinch;
+  if (!pinch) return;
+  const spread = Math.max(hologramPointerSpread(), 1);
+  const offset = hologramSignOffset(pinch.component.data.index);
+  offset.scale = hologramClamp(
+    pinch.startScale * (spread / pinch.startSpread),
+    HOLOGRAM_SIGN_MIN_SCALE,
+    HOLOGRAM_SIGN_MAX_SCALE
+  );
+  pinch.component.applyOffset();
+}
+
 function hologramPointerDown(event) {
   hologramTapStart = null;
   if (hologramReaderOpen || !hologramSignsVisible) return;
   if (!hologramSignEntities.length) return;
   if (event.pointerType === "mouse" && event.button !== 0) return;
+
+  hologramPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  // A third finger is ignored rather than allowed to confuse the pinch.
+  if (hologramPointers.size > 2) return;
+
+  if (hologramPointers.size === 2) {
+    startHologramPinch();
+    return;
+  }
+
   hologramTapStart = { id: event.pointerId, x: event.clientX, y: event.clientY, time: Date.now() };
+  const component = hologramSignComponentAt(event.clientX, event.clientY);
+  if (!component) return;
+  hologramDrag = {
+    id: event.pointerId,
+    entity: component.el,
+    component,
+    startX: event.clientX,
+    startY: event.clientY,
+    x: event.clientX,
+    y: event.clientY,
+    moved: false,
+  };
+  // Keep receiving moves when the finger wanders off the canvas: a drag that
+  // dies halfway is worse than one that never started.
+  if (event.currentTarget && event.currentTarget.setPointerCapture) {
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch (_) {
+      /* Already released or unsupported: moves still arrive while inside. */
+    }
+  }
+  const canvas = hologramMountScene && hologramMountScene.canvas;
+  if (canvas) canvas.style.cursor = "grabbing";
 }
 
 function hologramPointerUp(event) {
   const start = hologramTapStart;
+  const drag = hologramDrag && hologramDrag.id === event.pointerId ? hologramDrag : null;
+  hologramPointers.delete(event.pointerId);
+  if (hologramPinch && hologramPointers.size < 2) hologramPinch = null;
   hologramTapStart = null;
+
+  if (drag) {
+    hologramDrag = null;
+    const canvas = hologramMountScene && hologramMountScene.canvas;
+    if (canvas) canvas.style.cursor = "";
+  }
+
   if (!start || hologramReaderOpen || start.id !== event.pointerId) return;
+  // A finger that moved was placing a panel, not asking to read one.
+  if (drag && drag.moved) return;
+  // Another finger is still down, so this was part of a pinch.
+  if (hologramPointers.size) return;
   const travel = Math.hypot(event.clientX - start.x, event.clientY - start.y);
   if (travel > HOLOGRAM_TAP_SLOP || Date.now() - start.time > HOLOGRAM_TAP_MS) return;
 
-  const entity = hologramSignAtPoint(event.clientX, event.clientY);
-  const component = entity && entity.components && entity.components["hologram-sign"];
+  const component = hologramSignComponentAt(event.clientX, event.clientY);
   if (!component || !component.data) return;
   openHologramReader({
     title: component.data.title,
@@ -4686,10 +4964,42 @@ function hologramPointerUp(event) {
   });
 }
 
-// Desktop affordance: a panel under the mouse turns the pointer into a hand,
-// which is the only hint the sign gives that it can be opened. One raycast per
-// animation frame, and none at all for touch.
+// One finger either drags a panel or, for a mouse, hovers it. Two fingers resize,
+// and no gesture moves the camera any more: look-controls only follows the gyro.
 function hologramPointerMove(event) {
+  const tracked = hologramPointers.get(event.pointerId);
+  if (tracked) {
+    tracked.x = event.clientX;
+    tracked.y = event.clientY;
+  }
+
+  if (hologramPinch) {
+    updateHologramPinch();
+    return;
+  }
+
+  if (hologramDrag && hologramDrag.id === event.pointerId) {
+    if (!hologramDrag.moved) {
+      const travel = Math.hypot(
+        event.clientX - hologramDrag.startX,
+        event.clientY - hologramDrag.startY
+      );
+      // The slop is a dead zone, so a tap that wobbles never shifts the panel.
+      if (travel < HOLOGRAM_DRAG_SLOP) return;
+      // Start from where the finger is now, so the panel does not jump by the
+      // slop distance the moment the drag begins.
+      hologramDrag.moved = true;
+      hologramDrag.x = event.clientX;
+      hologramDrag.y = event.clientY;
+      return;
+    }
+    dragHologramSign(event);
+    return;
+  }
+
+  // Desktop affordance: a panel under the mouse turns the pointer into a hand,
+  // which is the only hint the sign gives that it can be picked up. One raycast
+  // per animation frame, and none at all for touch.
   if (event.pointerType && event.pointerType !== "mouse") return;
   if (hologramHoverFrame) return;
   const { clientX, clientY } = event;
@@ -4701,12 +5011,31 @@ function hologramPointerMove(event) {
       !hologramReaderOpen && hologramSignsVisible && hologramSignEntities.length
         ? hologramSignAtPoint(clientX, clientY)
         : null;
-    canvas.style.cursor = hovered ? "pointer" : "";
+    canvas.style.cursor = hovered ? "grab" : "";
   });
 }
 
-function clearHologramHover() {
+// A cancelled pointer (the browser took over, the window lost focus) must not
+// leave a panel glued to a finger that no longer exists.
+function clearHologramHover(event) {
   hologramTapStart = null;
+  if (event && event.pointerId !== undefined) {
+    hologramPointers.delete(event.pointerId);
+    if (hologramDrag && hologramDrag.id === event.pointerId) hologramDrag = null;
+    if (hologramPinch && hologramPointers.size < 2) hologramPinch = null;
+  } else {
+    hologramPointers.clear();
+    hologramDrag = null;
+    hologramPinch = null;
+  }
+  const canvas = hologramMountScene && hologramMountScene.canvas;
+  if (canvas && !hologramDrag) canvas.style.cursor = "";
+}
+
+// Leaving the glass only matters when no finger is down; a captured drag keeps
+// delivering moves, so its cursor stays a grabbing hand.
+function hologramPointerLeave() {
+  if (hologramPointers.size) return;
   const canvas = hologramMountScene && hologramMountScene.canvas;
   if (canvas) canvas.style.cursor = "";
 }
@@ -4716,7 +5045,7 @@ if (immersiveContainer) {
   immersiveContainer.addEventListener("pointerup", hologramPointerUp);
   immersiveContainer.addEventListener("pointermove", hologramPointerMove);
   immersiveContainer.addEventListener("pointercancel", clearHologramHover);
-  immersiveContainer.addEventListener("pointerleave", clearHologramHover);
+  immersiveContainer.addEventListener("pointerleave", hologramPointerLeave);
 }
 
 if (btnHoloReaderBack) {
@@ -4758,7 +5087,10 @@ async function startImmersive(art) {
 
 immersiveContainer.innerHTML = `
     <a-scene embedded vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
-      <a-entity camera look-controls="touchEnabled: true; mouseEnabled: true; magicWindowTrackingEnabled: true" position="0 1.6 0"></a-entity>
+      <!-- Look-controls follows the phone's gyro only. Touch and mouse looking
+           are off, so a drag always belongs to a hologram sign instead of
+           spinning the camera away from it. -->
+      <a-entity camera look-controls="touchEnabled: false; mouseEnabled: false; magicWindowTrackingEnabled: true" position="0 1.6 0"></a-entity>
       <a-entity gltf-model="${art.immersiveSkybox}" position="0 0 0" scale="100 100 100"></a-entity>
       <a-entity gltf-model="${art.modelObj}" animation-mixer="clip: *; loop: repeat" position="0 0 ${art.immersiveForward ?? -3}" rotation="${art.immersiveRotation || '0 0 0'}" scale="${art.immersiveScale || art.baseScale || 1} ${art.immersiveScale || art.baseScale || 1} ${art.immersiveScale || art.baseScale || 1}"></a-entity>
       <a-light type="ambient" color="#ffffff" intensity="0.6"></a-light>
@@ -4766,9 +5098,11 @@ immersiveContainer.innerHTML = `
     </a-scene>
   `;
 
-  // Every visit starts with the signs showing, and with no sign left open from
-  // an earlier visit.
+  // Every visit starts with the signs showing, the signs on their layout spots
+  // and no sign left open from an earlier visit.
   hologramSignsVisible = true;
+  resetHologramSignOffsets();
+  resetHologramHint();
   closeHologramReader(true);
   mountHologramSigns(art);
 }
@@ -4784,6 +5118,11 @@ function exitImmersive() {
   immersiveContainer.innerHTML = "";
   hologramSignEntities = [];
   hologramMountScene = null;
+  hologramPointers.clear();
+  hologramDrag = null;
+  hologramPinch = null;
+  resetHologramSignOffsets();
+  hideHologramHint();
   closeHologramReader(true);
   if (btnImmersiveSigns) btnImmersiveSigns.classList.add("hidden");
   setBgLayerForScreen(false);
