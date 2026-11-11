@@ -4093,31 +4093,84 @@ function hologramClipText(ctx, text, maxWidth) {
   return `${value}…`;
 }
 
-function hologramWrapText(ctx, text, maxWidth, maxLines) {
+// Splits a note into as many lines as it needs at the column width. Words are
+// the unit, but a word wider than the column is broken on characters, so a
+// pasted address or a run-on cannot bleed past the frame either.
+function hologramWrapLines(ctx, text, maxWidth) {
   const words = String(text || "").split(/\s+/).filter(Boolean);
   const lines = [];
   let line = "";
-  let overflow = false;
-  for (let index = 0; index < words.length; index += 1) {
-    const word = words[index];
+  const flush = () => {
+    if (!line) return;
+    lines.push(line);
+    line = "";
+  };
+  words.forEach((word) => {
     const candidate = line ? `${line} ${word}` : word;
     if (ctx.measureText(candidate).width <= maxWidth) {
       line = candidate;
-      continue;
+      return;
     }
-    if (line) lines.push(line);
-    line = word;
-    if (lines.length >= maxLines) {
-      overflow = true;
-      break;
+    flush();
+    if (ctx.measureText(word).width <= maxWidth) {
+      line = word;
+      return;
+    }
+    let chunk = "";
+    Array.from(word).forEach((ch) => {
+      if (chunk && ctx.measureText(chunk + ch).width > maxWidth) {
+        lines.push(chunk);
+        chunk = ch;
+        return;
+      }
+      chunk += ch;
+    });
+    line = chunk;
+  });
+  flush();
+  return lines;
+}
+
+// The whole note has to fit. A fixed 44px body only ever had room for four
+// lines, so anything longer lost its tail to an ellipsis; instead the text is
+// set as large as it can be while every line still fits the column and the
+// block still fits the body area, down to a floor that stays readable on a
+// placard held at arm's length.
+function hologramFitBody(ctx, text, { maxWidth, maxHeight, maxFontSize, minFontSize, maxLines, lineRatio }) {
+  const value = String(text || "").trim() || "Hologram";
+  for (let size = maxFontSize; size >= minFontSize; size -= 1) {
+    ctx.font = `600 ${size}px ${HOLOGRAM_FONT}`;
+    const lineHeight = Math.max(size, Math.round(size * lineRatio));
+    const lines = hologramWrapLines(ctx, value, maxWidth);
+    const inkHeight = (lines.length - 1) * lineHeight + size;
+    if (lines.length <= maxLines && inkHeight <= maxHeight) {
+      return { lines, fontSize: size, lineHeight };
     }
   }
-  if (line && lines.length < maxLines) lines.push(line);
-  const trimmed = lines.slice(0, maxLines).map((entry) => hologramClipText(ctx, entry, maxWidth));
-  if (overflow && trimmed.length) {
-    trimmed[trimmed.length - 1] = hologramClipText(ctx, `${trimmed[trimmed.length - 1]}…`, maxWidth);
+  // Even the floor is too big, so the note really is longer than the panel: keep
+  // every line that fits and mark the cut instead of dropping text silently.
+  ctx.font = `600 ${minFontSize}px ${HOLOGRAM_FONT}`;
+  const lineHeight = Math.max(minFontSize, Math.round(minFontSize * lineRatio));
+  const all = hologramWrapLines(ctx, value, maxWidth);
+  const fits = Math.max(1, Math.floor((maxHeight - minFontSize) / lineHeight) + 1);
+  const lines = all.slice(0, fits);
+  if (all.length > fits && lines.length) {
+    lines[lines.length - 1] = hologramClipText(ctx, `${lines[lines.length - 1]}…`, maxWidth);
   }
-  return trimmed;
+  return { lines, fontSize: minFontSize, lineHeight };
+}
+
+// Sets the largest size at or below `maxSize` that keeps `text` inside
+// `maxWidth`, so a long artwork name shrinks in the footer instead of losing
+// its tail. Leaves ctx.font at the chosen size.
+function hologramFitFont(ctx, text, maxWidth, maxSize, minSize) {
+  let size = maxSize;
+  ctx.font = `600 ${size}px ${HOLOGRAM_FONT}`;
+  while (size > minSize && ctx.measureText(text).width > maxWidth) {
+    size -= 1;
+    ctx.font = `600 ${size}px ${HOLOGRAM_FONT}`;
+  }
+  return size;
 }
 
 function drawHologramSignCanvas({ title, text, image, index, total, canvas: target }) {
@@ -4224,22 +4277,30 @@ function drawHologramSignCanvas({ title, text, image, index, total, canvas: targ
     ctx.restore();
   }
 
+  // A long note shrinks to fit instead of losing its tail: the body is set as
+  // large as the column and the body area allow, so four short lines still get
+  // the big type and a full-length note still gets every word.
+  const bodyTop = 140;
+  const bodyBottom = 430;
+  const fit = hologramFitBody(ctx, text || title || "Hologram", {
+    maxWidth: textRight - textLeft,
+    maxHeight: bodyBottom - bodyTop,
+    maxFontSize: hasImage ? 36 : 44,
+    minFontSize: 18,
+    maxLines: hasImage ? 9 : 10,
+    lineRatio: 1.3,
+  });
+  ctx.font = `600 ${fit.fontSize}px ${HOLOGRAM_FONT}`;
   ctx.fillStyle = HOLOGRAM_PALETTE.body;
-  const bodyFontSize = hasImage ? 36 : 44;
-  ctx.font = `600 ${bodyFontSize}px ${HOLOGRAM_FONT}`;
-  const lines = hologramWrapText(ctx, text || title || "Hologram", textRight - textLeft, hasImage ? 5 : 4);
-  const lineHeight = hasImage ? 46 : 58;
   // Centre the block in the body area so a one-line sign does not float at
   // the top of an otherwise empty panel, and centre each line inside the
   // column so short and long notes share the same axis.
-  const bodyTop = 140;
-  const bodyBottom = 430;
-  const blockHeight = Math.max(0, (lines.length - 1) * lineHeight);
-  const firstBaseline = bodyTop + Math.max(0, (bodyBottom - bodyTop - blockHeight) / 2) + bodyFontSize * 0.82;
+  const inkHeight = (fit.lines.length - 1) * fit.lineHeight + fit.fontSize;
+  const firstBaseline = bodyTop + Math.max(0, (bodyBottom - bodyTop - inkHeight) / 2) + fit.fontSize * 0.8;
   const textCenter = (textLeft + textRight) / 2;
   ctx.textAlign = "center";
-  lines.forEach((line, lineIndex) => {
-    ctx.fillText(line, textCenter, firstBaseline + lineIndex * lineHeight);
+  fit.lines.forEach((line, lineIndex) => {
+    ctx.fillText(line, textCenter, firstBaseline + lineIndex * fit.lineHeight);
   });
   // hologramLetterSpaced() places characters itself and assumes left alignment.
   ctx.textAlign = "left";
@@ -4252,9 +4313,10 @@ function drawHologramSignCanvas({ title, text, image, index, total, canvas: targ
   ctx.stroke();
 
   // Footer carries only the artwork title; the corner tag was removed. It starts
-  // inside the corner bracket so the two never overlap.
-  ctx.font = `600 20px ${HOLOGRAM_FONT}`;
+  // inside the corner bracket so the two never overlap, and a long name shrinks
+  // to fit rather than losing its tail.
   ctx.fillStyle = HOLOGRAM_PALETTE.labelDim;
+  hologramFitFont(ctx, title || "", 848, 20, 13);
   ctx.fillText(hologramClipText(ctx, title || "", 848), 80, 476);
 
   // Scanlines and a top sheen, clipped to the frame.
