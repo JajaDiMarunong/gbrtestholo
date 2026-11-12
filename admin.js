@@ -141,17 +141,6 @@ const quizEditorList = document.getElementById("quiz-editor-list");
 const btnAddQuizQuestion = document.getElementById("btn-add-quiz-question");
 const artworkSearchInput = document.getElementById("artwork-search");
 const artworkHuntFilter = document.getElementById("artwork-hunt-filter");
-const artworkSelectAll = document.getElementById("artwork-select-all");
-const artworkSelectionCount = document.getElementById("artwork-selection-count");
-const btnBulkEdit = document.getElementById("btn-bulk-edit");
-const bulkEditPanel = document.getElementById("bulk-edit-panel");
-const btnBulkClose = document.getElementById("btn-bulk-close");
-const btnBulkApply = document.getElementById("btn-bulk-apply");
-const bulkHunt = document.getElementById("bulk-hunt");
-const bulkPublished = document.getElementById("bulk-published");
-const bulkScannable = document.getElementById("bulk-scannable");
-const bulkMain = document.getElementById("bulk-main");
-const bulkEditStatus = document.getElementById("bulk-edit-status");
 const artworkCollectionStatus = document.getElementById("artwork-collection-status");
 const btnBuildAr = document.getElementById("btn-build-ar");
 const arBuildStatus = document.getElementById("ar-build-status");
@@ -1751,8 +1740,6 @@ notesApplyCustom.addEventListener("click", renderNotesList);
 let uploadedArtworksCache = [];
 let artworkSettingsCache = {};
 let allArtworksCache = [];
-let visibleArtworkIds = [];
-let selectedArtworkIds = new Set();
 let editingArtworkId = null;
 let artworkSearchQuery = "";
 let artworkFilterMode = "all";
@@ -2316,8 +2303,6 @@ async function loadAdminArtworks() {
       holograms: sanitizeHolograms(artworkSettingsCache[art.id]?.holograms || art.holograms),
     }));
 
-    const validIds = new Set(allArtworksCache.map((art) => art.id));
-    selectedArtworkIds = new Set([...selectedArtworkIds].filter((id) => validIds.has(id)));
     updateArtworkCountLabel();
     renderAdminArtworks();
 
@@ -2352,11 +2337,9 @@ function filteredAdminArtworks() {
 
 function renderAdminArtworks() {
   const visible = filteredAdminArtworks();
-  visibleArtworkIds = visible.map((art) => art.id);
 
   if (!visible.length) {
     adminArtworksList.innerHTML = `<p class="collection-empty">No artworks match this search or filter.</p>`;
-    updateArtworkSelectionUI();
     return;
   }
 
@@ -2365,15 +2348,11 @@ function renderAdminArtworks() {
       const isBuiltin = art._source === "builtin";
       const thumb = artworkThumb(art);
       const meta = [art.artist, art.year].filter(Boolean).join(" · ") || "No metadata";
-      const selected = selectedArtworkIds.has(art.id);
       const thumbMarkup = thumb
         ? `<img class="artwork-row-thumb" src="${escapeAttr(thumb)}" alt="" onerror="this.style.display='none'" />`
         : `<div class="artwork-row-thumb artwork-thumb-fallback">${escapeHtml((art.name || "?").slice(0, 1))}</div>`;
       return `
-      <div class="artwork-row ${selected ? "selected" : ""}" data-artwork-id="${escapeAttr(art.id)}">
-        <label class="artwork-select-cell" title="Select ${escapeAttr(art.name || "artwork")}">
-          <input class="artwork-select-input" type="checkbox" data-artwork-id="${escapeAttr(art.id)}" ${selected ? "checked" : ""} />
-        </label>
+      <div class="artwork-row" data-artwork-id="${escapeAttr(art.id)}">
         ${thumbMarkup}
         <div class="artwork-row-info">
           <p class="artwork-name">${escapeHtml(art.name)}</p>
@@ -2424,39 +2403,9 @@ function renderAdminArtworks() {
       if (artwork) startQuizEdit(artwork);
     });
   });
-  adminArtworksList.querySelectorAll(".artwork-select-input").forEach((checkbox) => {
-    checkbox.addEventListener("change", () => {
-      if (checkbox.checked) selectedArtworkIds.add(checkbox.dataset.artworkId);
-      else selectedArtworkIds.delete(checkbox.dataset.artworkId);
-      updateArtworkSelectionUI();
-    });
-  });
   adminArtworksList.querySelectorAll(".hunt-toggle-input").forEach((checkbox) => {
     checkbox.addEventListener("change", () => updateArtworkHunt(checkbox.dataset.artworkId, checkbox.checked));
   });
-  updateArtworkSelectionUI();
-}
-
-function updateArtworkSelectionUI() {
-  const count = selectedArtworkIds.size;
-  artworkSelectionCount.textContent = `${count} selected`;
-  btnBulkEdit.disabled = count === 0;
-  if (!count) closeBulkEditPanel();
-
-  const visibleSelectedCount = visibleArtworkIds.filter((id) => selectedArtworkIds.has(id)).length;
-  artworkSelectAll.checked = visibleArtworkIds.length > 0 && visibleSelectedCount === visibleArtworkIds.length;
-  artworkSelectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleArtworkIds.length;
-
-  adminArtworksList.querySelectorAll(".artwork-row").forEach((row) => {
-    row.classList.toggle("selected", selectedArtworkIds.has(row.dataset.artworkId));
-  });
-}
-
-function closeBulkEditPanel() {
-  bulkEditPanel.classList.add("hidden");
-  btnBulkEdit.textContent = "Bulk edit";
-  bulkEditStatus.textContent = "";
-  bulkEditStatus.className = "upload-status";
 }
 
 let collectionStatusTimer = null;
@@ -2533,138 +2482,14 @@ async function updateArtworkHunt(artworkId, shouldInclude) {
   }
 }
 
-async function applyBulkEdit() {
-  const selected = allArtworksCache.filter((art) => selectedArtworkIds.has(art.id));
-  if (!selected.length) return;
-
-  const user = firebase.auth().currentUser;
-  if (!user) {
-    alert("Sign in again before editing artworks.");
-    return;
-  }
-
-  const huntChoice = bulkHunt.value;
-  const publishedChoice = bulkPublished.value;
-  const scannableChoice = bulkScannable.value;
-  const mainChoice = bulkMain.value;
-  if ([huntChoice, publishedChoice, scannableChoice, mainChoice].every((choice) => choice === "keep")) {
-    bulkEditStatus.textContent = "Choose at least one field to change.";
-    bulkEditStatus.className = "upload-status error";
-    return;
-  }
-
-  const idToken = await user.getIdToken();
-  const errors = [];
-  let uploadedUpdated = 0;
-  let huntUpdated = 0;
-  let huntFallback = 0;
-  let skippedBuiltins = 0;
-
-  btnBulkApply.disabled = true;
-  bulkEditStatus.textContent = "Applying changes...";
-  bulkEditStatus.className = "upload-status";
-
-  for (const art of selected) {
-    const visibilityChanges = publishedChoice !== "keep" || scannableChoice !== "keep" || mainChoice !== "keep";
-    const huntValue = huntChoice === "keep" ? null : huntChoice === "yes";
-    const updates = {};
-    if (publishedChoice !== "keep") updates.published = publishedChoice === "yes";
-    if (scannableChoice !== "keep") updates.scannable = scannableChoice === "yes";
-    if (mainChoice !== "keep") updates.showInMainCollection = mainChoice === "yes";
-    if (huntValue !== null && art._source === "uploaded") updates.inScavengerHunt = huntValue;
-
-    if (visibilityChanges && art._source === "builtin") skippedBuiltins += 1;
-
-    if (Object.keys(updates).length) {
-      try {
-        const response = await fetch(`${FIREBASE_URL}/artworks/${encodeURIComponent(art.id)}.json?auth=${idToken}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updates),
-        });
-        if (!response.ok) throw new Error(`artwork update failed (${response.status})`);
-        uploadedUpdated += 1;
-        if (huntValue !== null) art.inScavengerHunt = huntValue;
-      } catch (err) {
-        errors.push(`${art.name}: ${err.message}`);
-      }
-    }
-
-    if (huntValue !== null) {
-      try {
-        const response = await fetch(`${FIREBASE_URL}/artworkSettings/${encodeURIComponent(art.id)}.json?auth=${idToken}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ inScavengerHunt: huntValue }),
-        });
-        if (!response.ok) {
-          throw new Error(response.status === 401 || response.status === 403
-            ? "artworkSettings rule not deployed"
-            : `settings update failed (${response.status})`);
-        }
-        artworkSettingsCache[art.id] = { ...(artworkSettingsCache[art.id] || {}), inScavengerHunt: huntValue };
-        huntUpdated += 1;
-      } catch (err) {
-        if (art._source === "uploaded") {
-          huntFallback += 1;
-          console.warn("[Admin] Hunt saved on artwork but settings node failed:", err);
-        } else {
-          errors.push(`${art.name}: ${err.message}`);
-        }
-      }
-    }
-  }
-
-  selectedArtworkIds.clear();
-  await loadAdminArtworks();
-  closeBulkEditPanel();
-  [bulkHunt, bulkPublished, bulkScannable, bulkMain].forEach((select) => { select.value = "keep"; });
-  btnBulkApply.disabled = false;
-
-  if (errors.length) {
-    setArtworkCollectionStatus(
-      `Updated ${uploadedUpdated} artwork(s), ${huntUpdated} hunt setting(s). ${errors.length} failed: ${errors[0]}`,
-      "error",
-    );
-  } else {
-    const parts = [];
-    if (huntUpdated) parts.push(`${huntUpdated} hunt setting(s)`);
-    if (uploadedUpdated) parts.push(`${uploadedUpdated} artwork(s)`);
-    let message = `Saved ${parts.join(" and ") || "changes"}.`;
-    if (skippedBuiltins) message += " Built-in artworks only support hunt changes.";
-    if (huntFallback) message += ` ${huntFallback} uploaded artwork(s) used the artwork fallback; deploy the artworkSettings rule for built-ins.`;
-    setArtworkCollectionStatus(message, "success");
-  }
-}
-
 artworkSearchInput.addEventListener("input", () => {
   artworkSearchQuery = artworkSearchInput.value;
-  selectedArtworkIds.clear();
   renderAdminArtworks();
 });
 artworkHuntFilter.addEventListener("change", () => {
   artworkFilterMode = artworkHuntFilter.value;
-  selectedArtworkIds.clear();
   renderAdminArtworks();
 });
-artworkSelectAll.addEventListener("change", () => {
-  visibleArtworkIds.forEach((id) => {
-    if (artworkSelectAll.checked) selectedArtworkIds.add(id);
-    else selectedArtworkIds.delete(id);
-  });
-  updateArtworkSelectionUI();
-});
-btnBulkEdit.addEventListener("click", () => {
-  const opening = bulkEditPanel.classList.contains("hidden");
-  bulkEditPanel.classList.toggle("hidden", !opening);
-  btnBulkEdit.textContent = opening ? "Hide bulk edit" : "Bulk edit";
-  if (opening) {
-    bulkEditStatus.textContent = "";
-    bulkEditStatus.className = "upload-status";
-  }
-});
-btnBulkClose.addEventListener("click", closeBulkEditPanel);
-btnBulkApply.addEventListener("click", applyBulkEdit);
 btnNewArtwork.addEventListener("click", () => {
   resetArtworkForm();
   openArtworkDrawer("Upload Artwork", "New Entry");
@@ -2677,7 +2502,6 @@ document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   if (!aiModal.classList.contains("hidden")) return;
   if (artworkDrawer.classList.contains("open")) resetArtworkForm();
-  else if (!bulkEditPanel.classList.contains("hidden")) closeBulkEditPanel();
 });
 
 // ---- Image upload handling ----

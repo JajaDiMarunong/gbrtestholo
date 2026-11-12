@@ -4,7 +4,22 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>GBR Museum — Live Guestbook</title>
-<link rel="stylesheet" href="guestbook.css?v=2" />
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#1a1310" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="GBR Museum" />
+<link rel="apple-touch-icon" href="./assets/logo.png" />
+<script>
+  window.gbrGuestbookInstallPrompt = null;
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    window.gbrGuestbookInstallPrompt = event;
+    window.dispatchEvent(new Event("gbr-install-available"));
+  });
+</script>
+<link rel="stylesheet" href="guestbook.css?v=3" />
 <script src="asset-manifest.js"></script>
 <script src="offline-store.js?v=1"></script>
 <base target="_blank">
@@ -30,6 +45,13 @@
           <label>Completions</label>
         </div>
         <div class="tv-clock" id="tv-clock">--:--</div>
+        <button id="btn-install-guestbook" class="tv-install-btn hidden" type="button" title="Install the guestbook as an app">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3v11m0 0 4-4m-4 4-4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M4 17.5V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+          <span id="install-guestbook-label">Install App</span>
+        </button>
       </div>
     </header>
 
@@ -85,6 +107,6 @@
     firebase.initializeApp(firebaseConfig);
   </script>
 
-  <script src="guestbook.js?v=6" defer></script>
+  <script src="guestbook.js?v=7" defer></script>
 </body>
 </html>

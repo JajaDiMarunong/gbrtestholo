@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="GBR Admin" />
 <link rel="apple-touch-icon" href="./assets/logo.png" />
-<link rel="stylesheet" href="admin.css?v=14" />
+<link rel="stylesheet" href="admin.css?v=15" />
 <script src="asset-manifest.js"></script>
 <script src="offline-store.js?v=1"></script>
 <script>
@@ -495,7 +495,7 @@
                   <p class="eyebrow">Collection</p>
                   <h3>Existing Artworks</h3>
                 </div>
-                <p class="collection-hint">Select artworks to bulk edit, or use the hunt switch for a quick change.</p>
+                <p class="collection-hint">Open an artwork to edit it, or use the hunt switch for a quick change.</p>
               </header>
 
               <div class="collection-toolbar">
@@ -511,63 +511,9 @@
                     <option value="draft">Drafts only</option>
                   </select>
                 </div>
-                <div class="collection-toolbar-actions">
-                  <label class="checkbox-label select-all-label"><input id="artwork-select-all" type="checkbox" /> Select all shown</label>
-                  <span id="artwork-selection-count" class="filter-count">0 selected</span>
-                  <button id="btn-bulk-edit" class="btn-secondary btn-small" type="button" disabled>Bulk edit</button>
-                </div>
               </div>
 
               <p id="artwork-collection-status" class="collection-status hidden" role="status"></p>
-
-              <div id="bulk-edit-panel" class="bulk-edit-panel hidden">
-                <div class="bulk-edit-head">
-                  <div>
-                    <p class="eyebrow">Bulk edit</p>
-                    <h4>Update selected artworks</h4>
-                  </div>
-                  <button id="btn-bulk-close" class="btn-tiny" type="button">Close</button>
-                </div>
-                <p class="modal-desc">Choose what to change. Keep leaves a field untouched. Published, collection, and AR settings apply to uploaded artworks; scavenger hunt applies to every artwork.</p>
-                <div class="bulk-edit-grid">
-                  <label class="bulk-field">
-                    <span>Scavenger hunt</span>
-                    <select id="bulk-hunt" class="date-select">
-                      <option value="keep">Keep unchanged</option>
-                      <option value="yes">Include in hunt</option>
-                      <option value="no">Remove from hunt</option>
-                    </select>
-                  </label>
-                  <label class="bulk-field">
-                    <span>Published</span>
-                    <select id="bulk-published" class="date-select">
-                      <option value="keep">Keep unchanged</option>
-                      <option value="yes">Publish</option>
-                      <option value="no">Unpublish</option>
-                    </select>
-                  </label>
-                  <label class="bulk-field">
-                    <span>AR scanning</span>
-                    <select id="bulk-scannable" class="date-select">
-                      <option value="keep">Keep unchanged</option>
-                      <option value="yes">Enable</option>
-                      <option value="no">Disable</option>
-                    </select>
-                  </label>
-                  <label class="bulk-field">
-                    <span>Main collection</span>
-                    <select id="bulk-main" class="date-select">
-                      <option value="keep">Keep unchanged</option>
-                      <option value="yes">Show</option>
-                      <option value="no">Hide</option>
-                    </select>
-                  </label>
-                </div>
-                <div class="bulk-edit-actions">
-                  <span id="bulk-edit-status" class="upload-status"></span>
-                  <button id="btn-bulk-apply" class="btn-primary btn-inline" type="button">Apply changes</button>
-                </div>
-              </div>
 
               <div id="admin-artworks-list" class="admin-artworks-list"></div>
 
@@ -759,6 +705,6 @@
     firebase.initializeApp(firebaseConfig);
   </script>
 
-  <script src="admin.js?v=19" defer></script>
+  <script src="admin.js?v=20" defer></script>
 </body>
 </html>

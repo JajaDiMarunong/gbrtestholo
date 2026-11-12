@@ -85,6 +85,66 @@ initAuth().then(() => {
 });
 
 // -------------------------------------------------------------------
+// Install as an app
+// -------------------------------------------------------------------
+const btnInstallGuestbook = document.getElementById("btn-install-guestbook");
+const installGuestbookLabel = document.getElementById("install-guestbook-label");
+const guestbookStandaloneQuery = window.matchMedia("(display-mode: standalone)");
+let guestbookAppInstalled = false;
+
+function isGuestbookAppInstalled() {
+  return guestbookAppInstalled || guestbookStandaloneQuery.matches || window.navigator.standalone === true;
+}
+
+function updateGuestbookInstallButton() {
+  if (!btnInstallGuestbook) return;
+  if (isGuestbookAppInstalled()) {
+    btnInstallGuestbook.classList.add("hidden");
+    return;
+  }
+  // The browser only hands us a prompt when this display can be installed.
+  const promptReady = Boolean(window.gbrGuestbookInstallPrompt);
+  if (installGuestbookLabel) installGuestbookLabel.textContent = promptReady ? "Install App" : "How to Install";
+  btnInstallGuestbook.classList.remove("hidden");
+}
+
+async function installGuestbookApp() {
+  if (isGuestbookAppInstalled()) {
+    updateGuestbookInstallButton();
+    return;
+  }
+  const promptEvent = window.gbrGuestbookInstallPrompt;
+  if (!promptEvent) {
+    window.alert("To install the GBR Museum app, open your browser menu and choose \"Install app\" or \"Add to Home Screen\".");
+    return;
+  }
+  window.gbrGuestbookInstallPrompt = null;
+  btnInstallGuestbook.disabled = true;
+  try {
+    await promptEvent.prompt();
+    await promptEvent.userChoice;
+  } catch (error) {
+    console.warn("[Guestbook] Install prompt failed:", error);
+  } finally {
+    btnInstallGuestbook.disabled = false;
+    updateGuestbookInstallButton();
+  }
+}
+
+if (btnInstallGuestbook) btnInstallGuestbook.addEventListener("click", installGuestbookApp);
+window.addEventListener("gbr-install-available", updateGuestbookInstallButton);
+window.addEventListener("appinstalled", () => {
+  guestbookAppInstalled = true;
+  window.gbrGuestbookInstallPrompt = null;
+  updateGuestbookInstallButton();
+});
+if (guestbookStandaloneQuery.addEventListener) {
+  guestbookStandaloneQuery.addEventListener("change", updateGuestbookInstallButton);
+}
+updateGuestbookInstallButton();
+
+
+// -------------------------------------------------------------------
 // Auto-refresh
 // -------------------------------------------------------------------
 function startAutoRefresh() {
