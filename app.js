@@ -345,6 +345,12 @@ const metaYear = document.getElementById("meta-year");
 const metaRowLocation = document.getElementById("meta-row-location");
 const metaLocation = document.getElementById("meta-location");
 
+const lockedPreviewModal = document.getElementById("locked-preview-modal");
+const lockedPreviewImage = document.getElementById("locked-preview-image");
+const lockedPreviewFallback = document.getElementById("locked-preview-fallback");
+const lockedPreviewTitle = document.getElementById("locked-preview-title");
+const btnLockedPreviewClose = document.getElementById("btn-locked-preview-close");
+
 const learnModal = document.getElementById("learn-modal");
 const learnArtwork = document.getElementById("learn-artwork");
 const learnStatus = document.getElementById("learn-status");
@@ -690,18 +696,14 @@ function renderGallery() {
       ${statusBadge}
       <div class="art-card-caption">
         <h3>${art.name}</h3>
-        <p>${art.unlocked ? "Tap to view details" : "Scan this artwork to reveal it"}</p>
+        <p>${art.unlocked ? "Tap to view details" : "Tap to preview the piece"}</p>
       </div>
     `;
 
     if (art.unlocked) {
       card.addEventListener("click", () => openDetail(art.id));
     } else {
-      card.addEventListener("click", () => {
-        showFilterToast("Scan this artwork first to unlock it");
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(hideFilterToast, 1800);
-      });
+      card.addEventListener("click", () => openLockedPreview(art));
     }
 
     galleryGrid.appendChild(card);
@@ -712,6 +714,56 @@ function renderGallery() {
   progressFill.style.width = pct + "%";
   progressLabel.textContent = `${unlockedCount} / ${galleryArtworks.length} unlocked`;
 }
+
+// -------------------------------------------------------------------
+// Locked artworks
+// The scavenger hunt only hands out a piece once it has been scanned, so a
+// locked artwork is shown blurred in the gallery and in the low-data library,
+// and its write-up stays on the museum floor. Tapping one opens a small panel
+// with the same soft photo, enlarged, and the title — enough to recognise the
+// piece you are looking for without spoiling the story.
+// -------------------------------------------------------------------
+const LOCKED_LIBRARY_HINT = "Scan this artwork in the museum to unlock its story.";
+
+// Artworks kept out of the hunt can never be unlocked by scanning, so they stay
+// readable everywhere instead of being blurred forever.
+function isArtworkLocked(art) {
+  if (!art || art.unlocked) return false;
+  if (art.published === false || art.inScavengerHunt === false) return false;
+  return true;
+}
+
+function openLockedPreview(art) {
+  if (!art) return;
+  lockedPreviewTitle.textContent = art.name;
+  lockedPreviewImage.alt = art.name;
+  lockedPreviewImage.style.display = "";
+  lockedPreviewFallback.textContent = art.icon || "🖼️";
+  lockedPreviewFallback.classList.add("hidden");
+  // The same fallback the cards use, so a photo that fails to load still leaves
+  // a titled panel instead of a blank rectangle.
+  lockedPreviewImage.onerror = () => {
+    lockedPreviewImage.style.display = "none";
+    lockedPreviewFallback.classList.remove("hidden");
+  };
+  if (art.image) {
+    lockedPreviewImage.src = art.image;
+  } else {
+    lockedPreviewImage.onerror = null;
+    lockedPreviewImage.style.display = "none";
+    lockedPreviewFallback.classList.remove("hidden");
+  }
+  lockedPreviewModal.classList.remove("hidden");
+}
+
+function hideLockedPreview() {
+  lockedPreviewModal.classList.add("hidden");
+}
+
+btnLockedPreviewClose.addEventListener("click", hideLockedPreview);
+lockedPreviewModal.addEventListener("click", (e) => {
+  if (e.target === lockedPreviewModal) hideLockedPreview();
+});
 
 // -------------------------------------------------------------------
 // Screen switching
@@ -1161,31 +1213,37 @@ function renderBadges() {
 // -------------------------------------------------------------------
 function renderLibrary() {
   libraryList.innerHTML = artworks.filter((art) => art.published !== false)
-    .map(
-      (art, i) => `
-      <div class="library-card" data-artwork-id="${art.id}">
+    .map((art) => {
+      // Locked pieces keep their photo in the list but softened, and their
+      // write-up is held back until the hunting visitor has scanned them.
+      const locked = isArtworkLocked(art);
+      return `
+      <div class="library-card${locked ? " locked" : ""}" data-artwork-id="${art.id}">
       <div class="library-card-photo">
         <img src="${art.image}" alt="${art.name}"
              onerror="this.style.display='none'; this.closest('.library-card').querySelector('.library-fallback').style.display='flex';" />
         <div class="library-fallback" style="display:none;">${art.icon}</div>
+        ${locked ? `<span class="library-lock-pill" aria-label="Locked">🔒</span>` : ""}
       </div>
       <div class="library-card-info">
         <div class="library-card-title-row">
           <h4>${art.name}</h4>
-          ${art.modelObj ? `<span class="model-badge">🧊 3D Model</span>` : ""}
+          ${art.modelObj && !locked ? `<span class="model-badge">🧊 3D Model</span>` : ""}
         </div>
-        <p>${art.details}</p>
-        <span class="library-view-hint">Tap to view</span>
+        <p>${locked ? LOCKED_LIBRARY_HINT : art.details}</p>
+        <span class="library-view-hint">${locked ? "Tap to preview" : "Tap to view"}</span>
       </div>
     </div>
-  `
-    )
+  `;
+    })
     .join("");
 
   libraryList.querySelectorAll(".library-card").forEach((card) => {
     card.addEventListener("click", () => {
       const art = artworks.find((item) => item.id === card.dataset.artworkId);
-      openLibraryDetail(art);
+      if (!art) return;
+      if (isArtworkLocked(art)) openLockedPreview(art);
+      else openLibraryDetail(art);
     });
   });
 }
@@ -1195,6 +1253,13 @@ function renderLibrary() {
 let libraryDetailArtId = null;
 
 function openLibraryDetail(art) {
+  if (!art) return;
+  // A locked piece never reaches the full write-up: the preview panel shows the
+  // softened photo and the title instead.
+  if (isArtworkLocked(art)) {
+    openLockedPreview(art);
+    return;
+  }
   libraryDetailArtId = art.id;
   libraryDetailImage.src = art.image;
   libraryDetailImage.alt = art.name;
@@ -1555,6 +1620,12 @@ let currentDetailArtId = null;
 function openDetail(artworkId) {
   const art = artworks.find((a) => a.id === artworkId);
   if (!art) return;
+  // However the route was reached (gallery, quiz exit, immersive exit), a piece
+  // that has not been scanned never shows its write-up.
+  if (isArtworkLocked(art)) {
+    openLockedPreview(art);
+    return;
+  }
   currentDetailArtId = artworkId;
 
   detailImage.src = art.image;

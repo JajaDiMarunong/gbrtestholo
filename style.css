@@ -261,6 +261,14 @@ button.corner-fabs-right {
 }
 .art-card.unlocked { border-color: var(--frame-gold); cursor: pointer; }
 .art-card.unlocked:active { transform: scale(0.97); }
+/* A locked piece is recognisable but not readable: the photo is softened, so the
+   hunt still has something to reveal. Tapping it opens the enlarged preview. */
+.art-card.locked { cursor: pointer; }
+.art-card.locked:active { transform: scale(0.97); }
+.art-card.locked .art-card-img {
+  filter: blur(3px) saturate(0.82) brightness(0.86);
+  transform: scale(1.1);
+}
 
 .art-card-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .art-card-fallback {
@@ -564,8 +572,20 @@ button.corner-fabs-right {
   background: rgba(255,255,255,0.03); overflow: hidden;
   cursor: pointer;
 }
-.library-card-photo { width: 88px; height: 88px; flex-shrink: 0; }
+.library-card-photo { width: 88px; height: 88px; flex-shrink: 0; position: relative; overflow: hidden; }
 .library-card-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Locked library rows keep the photo as a hint and hold the write-up back until
+   the piece has been scanned in the museum. */
+.library-card.locked .library-card-photo img {
+  filter: blur(3px) saturate(0.82) brightness(0.86);
+  transform: scale(1.16);
+}
+.library-card.locked .library-card-info p { color: rgba(201, 168, 118, 0.82); font-style: italic; }
+.library-lock-pill {
+  position: absolute; top: 4px; right: 4px; z-index: 1; line-height: 1;
+  font-size: 9px; padding: 4px 5px; border-radius: 6px;
+  background: rgba(0,0,0,0.62); border: 1px solid rgba(244,241,234,0.22);
+}
 .library-card .library-fallback {
   width: 88px; height: 88px; flex-shrink: 0; display: flex; align-items: center;
   justify-content: center; font-size: 26px; background: rgba(0,0,0,0.3);
@@ -622,6 +642,56 @@ button.corner-fabs-right {
   flex-shrink: 0;
 }
 .library-detail-footer .btn-primary { margin-top: 0; }
+
+/* ---------------- locked artwork preview popup ---------------- */
+/* Shown instead of the library popup while a piece is still sealed: the same
+   softened photo, enlarged, plus the title — never the write-up. */
+.modal-card.locked-preview-card {
+  max-width: 340px; padding: 0; overflow: hidden;
+  max-height: calc(100vh - 48px); text-align: left;
+  display: flex; flex-direction: column;
+}
+.locked-preview-photo {
+  position: relative; width: 100%; aspect-ratio: 4 / 3;
+  /* On a short viewport (landscape phone) the photo gives up height before the
+     title and the button get pushed off screen. */
+  flex: 0 1 auto; min-height: 92px; max-height: 46vh;
+  overflow: hidden; background: rgba(0,0,0,0.45);
+}
+.locked-preview-photo img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; display: block;
+  filter: blur(8px) saturate(0.82) brightness(0.86);
+  transform: scale(1.12);
+}
+.locked-preview-fallback {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 50px; opacity: 0.55;
+}
+.locked-preview-fallback.hidden { display: none; }
+.locked-preview-veil {
+  position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(circle at 50% 45%, rgba(10,8,6,0.08) 0%, rgba(10,8,6,0.5) 100%);
+}
+.locked-preview-lock {
+  position: absolute; top: 10px; right: 10px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 5px 9px; border-radius: 999px;
+  background: rgba(0,0,0,0.62); color: rgba(244,241,234,0.85);
+  border: 1px solid rgba(201,168,118,0.45);
+}
+.locked-preview-body { padding: 16px 20px 14px; overflow-y: auto; min-height: 0; }
+#locked-preview-title { font-size: 18px; margin: 0 0 7px 0; }
+.locked-preview-body .modal-desc { margin: 0; }
+.locked-preview-footer { padding: 4px 20px calc(16px + env(safe-area-inset-bottom)); flex-shrink: 0; }
+.locked-preview-footer .btn-primary { margin-top: 0; }
+/* Landscape phones are shorter than the panel needs, so the soft photo and the
+   paragraph step aside and the title + button stay on one screen. */
+@media (max-height: 470px) {
+  .locked-preview-photo { max-height: 38vh; min-height: 72px; }
+  .locked-preview-body { padding: 12px 20px 8px; }
+  .locked-preview-body .modal-desc { display: none; }
+}
 
 /* ---------------- Learn More ---------------- */
 /* A quiet gold outline rather than a second filled button: on the detail screen it
