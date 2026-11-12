@@ -185,6 +185,16 @@ function normalizeHologramText(value) {
   return String(value == null ? "" : value).replace(/\s+/g, " ").trim().slice(0, 280);
 }
 
+// A sign shows text, an image, or both. Records written before this choice
+// existed only carry the two fields, so the mode falls back to whatever the sign
+// actually holds.
+function normalizeHologramMode(value, hasText, hasImage) {
+  const stored = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (stored === "text" || stored === "image" || stored === "both") return stored;
+  if (hasImage) return hasText ? "both" : "image";
+  return "text";
+}
+
 function normalizeHolograms(raw) {
   const source = raw && typeof raw === "object" ? raw : {};
   const signs = (Array.isArray(source.signs) ? source.signs : [])
@@ -192,7 +202,8 @@ function normalizeHolograms(raw) {
       if (!sign || typeof sign !== "object") return null;
       const text = normalizeHologramText(sign.text);
       const imageUrl = typeof sign.imageUrl === "string" && sign.imageUrl.trim() ? sign.imageUrl.trim() : "";
-      return text || imageUrl ? { text, imageUrl } : null;
+      if (!text && !imageUrl) return null;
+      return { text, imageUrl, mode: normalizeHologramMode(sign.mode, !!text, !!imageUrl) };
     })
     .filter(Boolean)
     .slice(0, MAX_HOLOGRAM_SIGNS);
@@ -4173,7 +4184,21 @@ function hologramFitFont(ctx, text, maxWidth, maxSize, minSize) {
   return size;
 }
 
-function drawHologramSignCanvas({ title, text, image, index, total, canvas: target }) {
+// A sign is text only, an image only, or image and text together. "image" and
+// "both" need their content to exist, so a half-filled sign falls back to the
+// layout it can actually draw instead of rendering an empty panel.
+function resolveHologramSignLayout(mode, hasText, hasImage) {
+  let layout = mode;
+  if (layout !== "text" && layout !== "image" && layout !== "both") {
+    layout = hasImage ? (hasText ? "both" : "image") : "text";
+  }
+  if (layout === "image" && !hasImage) layout = "text";
+  if (layout === "both" && !hasImage) layout = "text";
+  if (layout === "both" && !hasText) layout = "image";
+  return layout;
+}
+
+function drawHologramSignCanvas({ title, text, image, mode, index, total, canvas: target }) {
   const canvas = target || document.createElement("canvas");
   if (canvas.width !== HOLOGRAM_TEX_WIDTH) canvas.width = HOLOGRAM_TEX_WIDTH;
   if (canvas.height !== HOLOGRAM_TEX_HEIGHT) canvas.height = HOLOGRAM_TEX_HEIGHT;
@@ -4190,6 +4215,9 @@ function drawHologramSignCanvas({ title, text, image, index, total, canvas: targ
   const panelH = HOLOGRAM_ART_HEIGHT - 40;
   const radius = 28;
 
+  const layout = resolveHologramSignLayout(mode, !!text, !!image);
+  const imageOnly = layout === "image";
+
   ctx.clearRect(0, 0, HOLOGRAM_ART_WIDTH, HOLOGRAM_ART_HEIGHT);
 
   hologramRoundRect(ctx, panelX, panelY, panelW, panelH, radius);
@@ -4199,6 +4227,29 @@ function drawHologramSignCanvas({ title, text, image, index, total, canvas: targ
   body.addColorStop(1, HOLOGRAM_PALETTE.panelBottom);
   ctx.fillStyle = body;
   ctx.fill();
+
+  // Image-only sign: the photo is the placard, so it covers the panel edge to
+  // edge (cropped, never letterboxed) and the frame, brackets, labels and
+  // scanlines are painted on top of it. The note is left out entirely.
+  if (imageOnly) {
+    ctx.save();
+    hologramRoundRect(ctx, panelX, panelY, panelW, panelH, radius);
+    ctx.clip();
+    const cover = Math.max(panelW / image.width, panelH / image.height);
+    const coverW = image.width * cover;
+    const coverH = image.height * cover;
+    ctx.drawImage(image, panelX + (panelW - coverW) / 2, panelY + (panelH - coverH) / 2, coverW, coverH);
+    // Soft veils at the top and bottom keep the corner label and the artwork
+    // title legible without dimming the middle of the picture.
+    const veil = ctx.createLinearGradient(0, panelY, 0, panelY + panelH);
+    veil.addColorStop(0, "rgba(24, 18, 15, 0.36)");
+    veil.addColorStop(0.24, "rgba(24, 18, 15, 0)");
+    veil.addColorStop(0.76, "rgba(24, 18, 15, 0)");
+    veil.addColorStop(1, "rgba(24, 18, 15, 0.5)");
+    ctx.fillStyle = veil;
+    ctx.fillRect(panelX, panelY, panelW, panelH);
+    ctx.restore();
+  }
 
   // Halo drawn just outside the frame so the panel bleeds light.
   ctx.save();
@@ -4252,7 +4303,9 @@ function drawHologramSignCanvas({ title, text, image, index, total, canvas: targ
   ctx.lineTo(972, 110);
   ctx.stroke();
 
-  const hasImage = !!image;
+  // "both" is the only layout that keeps the square thumbnail beside the note;
+  // an image-only sign already owns the whole panel by now.
+  const hasImage = layout === "both";
   const textLeft = hasImage ? 372 : 52;
   const textRight = 972;
   if (hasImage) {
@@ -4277,33 +4330,37 @@ function drawHologramSignCanvas({ title, text, image, index, total, canvas: targ
     ctx.restore();
   }
 
-  // A long note shrinks to fit instead of losing its tail: the body is set as
-  // large as the column and the body area allow, so four short lines still get
-  // the big type and a full-length note still gets every word.
-  const bodyTop = 140;
-  const bodyBottom = 430;
-  const fit = hologramFitBody(ctx, text || title || "Hologram", {
-    maxWidth: textRight - textLeft,
-    maxHeight: bodyBottom - bodyTop,
-    maxFontSize: hasImage ? 36 : 44,
-    minFontSize: 18,
-    maxLines: hasImage ? 9 : 10,
-    lineRatio: 1.3,
-  });
-  ctx.font = `600 ${fit.fontSize}px ${HOLOGRAM_FONT}`;
-  ctx.fillStyle = HOLOGRAM_PALETTE.body;
-  // Centre the block in the body area so a one-line sign does not float at
-  // the top of an otherwise empty panel, and centre each line inside the
-  // column so short and long notes share the same axis.
-  const inkHeight = (fit.lines.length - 1) * fit.lineHeight + fit.fontSize;
-  const firstBaseline = bodyTop + Math.max(0, (bodyBottom - bodyTop - inkHeight) / 2) + fit.fontSize * 0.8;
-  const textCenter = (textLeft + textRight) / 2;
-  ctx.textAlign = "center";
-  fit.lines.forEach((line, lineIndex) => {
-    ctx.fillText(line, textCenter, firstBaseline + lineIndex * fit.lineHeight);
-  });
-  // hologramLetterSpaced() places characters itself and assumes left alignment.
-  ctx.textAlign = "left";
+  // An image-only sign gives the whole body to its photo, so the note is only
+  // laid out when the sign carries text of its own.
+  if (!imageOnly) {
+    // A long note shrinks to fit instead of losing its tail: the body is set as
+    // large as the column and the body area allow, so four short lines still get
+    // the big type and a full-length note still gets every word.
+    const bodyTop = 140;
+    const bodyBottom = 430;
+    const fit = hologramFitBody(ctx, text || title || "Hologram", {
+      maxWidth: textRight - textLeft,
+      maxHeight: bodyBottom - bodyTop,
+      maxFontSize: hasImage ? 36 : 44,
+      minFontSize: 18,
+      maxLines: hasImage ? 9 : 10,
+      lineRatio: 1.3,
+    });
+    ctx.font = `600 ${fit.fontSize}px ${HOLOGRAM_FONT}`;
+    ctx.fillStyle = HOLOGRAM_PALETTE.body;
+    // Centre the block in the body area so a one-line sign does not float at
+    // the top of an otherwise empty panel, and centre each line inside the
+    // column so short and long notes share the same axis.
+    const inkHeight = (fit.lines.length - 1) * fit.lineHeight + fit.fontSize;
+    const firstBaseline = bodyTop + Math.max(0, (bodyBottom - bodyTop - inkHeight) / 2) + fit.fontSize * 0.8;
+    const textCenter = (textLeft + textRight) / 2;
+    ctx.textAlign = "center";
+    fit.lines.forEach((line, lineIndex) => {
+      ctx.fillText(line, textCenter, firstBaseline + lineIndex * fit.lineHeight);
+    });
+    // hologramLetterSpaced() places characters itself and assumes left alignment.
+    ctx.textAlign = "left";
+  }
 
   ctx.strokeStyle = HOLOGRAM_PALETTE.ruleFaint;
   ctx.lineWidth = 2;
@@ -4425,6 +4482,7 @@ function registerHologramSignComponent() {
       text: { type: "string", default: "" },
       title: { type: "string", default: "" },
       image: { type: "string", default: "" },
+      mode: { type: "string", default: "" },
       index: { type: "int", default: 0 },
       total: { type: "int", default: 1 },
     },
@@ -4456,6 +4514,7 @@ function registerHologramSignComponent() {
         title: this.data.title,
         text: this.data.text,
         image: null,
+        mode: this.data.mode,
         index: this.data.index,
         total: this.data.total,
       });
@@ -4515,6 +4574,7 @@ function registerHologramSignComponent() {
         title: this.data.title,
         text: this.data.text,
         image,
+        mode: this.data.mode,
         index: this.data.index,
         total: this.data.total,
         canvas: this.canvas,
@@ -4659,6 +4719,7 @@ function mountHologramSigns(art) {
         text: sign.text || "",
         title: (art && art.name) || "",
         image: sign.imageUrl || "",
+        mode: sign.mode || "",
         index,
         total: signs.length,
       });
@@ -4730,6 +4791,7 @@ function drawHologramReaderCanvas(sign) {
     title: sign.title,
     text: sign.text,
     image: sign.image || null,
+    mode: sign.mode || "",
     index: sign.index,
     total: sign.total,
     canvas: holoReaderCanvas,
@@ -5021,6 +5083,7 @@ function hologramPointerUp(event) {
     text: component.data.text,
     imageUrl: component.data.image || "",
     image: component.loadedImage || null,
+    mode: component.data.mode || "",
     index: component.data.index,
     total: component.data.total,
   });

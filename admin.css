@@ -1040,6 +1040,8 @@ body.drawer-open { overflow: hidden; }
 }
 .hologram-card .field-label { margin-top: 8px; }
 .hologram-card .note-textarea { min-height: 66px; margin-bottom: 4px; }
+.hologram-mode-select { width: 100%; margin-top: 6px; }
+.hologram-mode-hint { margin: 7px 0 2px; }
 .hologram-image-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .hologram-image-preview {
   display: block;

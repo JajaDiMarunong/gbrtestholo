@@ -1919,6 +1919,16 @@ function sanitizeHologramText(value) {
   return String(value == null ? "" : value).replace(/\s+/g, " ").trim().slice(0, 280);
 }
 
+// A sign shows text, an image, or both. A record saved before this choice
+// existed is read from what it holds, so nothing has to be migrated.
+function sanitizeHologramMode(value, hasText, hasImage, fallback) {
+  const stored = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (stored === "text" || stored === "image" || stored === "both") return stored;
+  if (hasText && hasImage) return "both";
+  if (hasImage) return "image";
+  return fallback || "text";
+}
+
 function sanitizeHolograms(raw) {
   const source = raw && typeof raw === "object" ? raw : {};
   const signs = (Array.isArray(source.signs) ? source.signs : [])
@@ -1926,7 +1936,8 @@ function sanitizeHolograms(raw) {
       if (!sign || typeof sign !== "object") return null;
       const text = sanitizeHologramText(sign.text);
       const imageUrl = typeof sign.imageUrl === "string" && sign.imageUrl.trim() ? sign.imageUrl.trim() : "";
-      return text || imageUrl ? { text, imageUrl } : null;
+      if (!text && !imageUrl) return null;
+      return { text, imageUrl, mode: sanitizeHologramMode(sign.mode, !!text, !!imageUrl) };
     })
     .filter(Boolean)
     .slice(0, MAX_HOLOGRAM_SIGNS);
@@ -1935,23 +1946,68 @@ function sanitizeHolograms(raw) {
   return { enabled: source.enabled !== false && signs.length > 0, signs };
 }
 
+const HOLOGRAM_MODE_LABELS = {
+  text: "Text only",
+  both: "Image and text",
+  image: "Image only (fills the sign)",
+};
+
+const HOLOGRAM_MODE_HINTS = {
+  text: "Text only — the note fills the sign.",
+  both: "Image and text — the photo sits on the left, the note on the right.",
+  image: "Image only — the photo covers the whole sign, so the note is hidden.",
+};
+
+function hologramModeHint(mode) {
+  return HOLOGRAM_MODE_HINTS[mode] || HOLOGRAM_MODE_HINTS.text;
+}
+
 function hologramSignMarkup(sign) {
   const imageUrl = sign.imageUrl || "";
+  const text = sanitizeHologramText(sign.text);
+  // A brand-new card opens on "image and text" so both fields are in reach,
+  // while a saved sign keeps the choice stored with it.
+  const mode = sanitizeHologramMode(sign.mode, !!text, !!imageUrl, "both");
+  const options = Object.keys(HOLOGRAM_MODE_LABELS)
+    .map((value) => `<option value="${value}"${value === mode ? " selected" : ""}>${escapeHtml(HOLOGRAM_MODE_LABELS[value])}</option>`)
+    .join("");
   return `
     <div class="hologram-card" data-image-url="${escapeAttr(imageUrl)}" data-image-cleared="0">
       <div class="hologram-card-head">
         <span class="hologram-card-label">Sign</span>
         <button type="button" class="btn-tiny danger hologram-remove-btn">Remove</button>
       </div>
-      <label class="field-label">Text</label>
-      <textarea class="hologram-text note-textarea" rows="2" maxlength="280" placeholder="Short line shown on the hologram…">${escapeHtml(sign.text || "")}</textarea>
-      <label class="field-label">Image (optional)</label>
-      <div class="hologram-image-row">
-        <input class="hologram-image-input" type="file" accept="image/*" />
-        <button type="button" class="btn-tiny hologram-image-clear${imageUrl ? "" : " hidden"}">Clear image</button>
+      <label class="field-label">What this sign shows</label>
+      <select class="date-select hologram-mode-select" aria-label="Hologram sign content">${options}</select>
+      <p class="field-hint hologram-mode-hint">${escapeHtml(hologramModeHint(mode))}</p>
+      <div class="hologram-field hologram-text-field">
+        <label class="field-label">Text</label>
+        <textarea class="hologram-text note-textarea" rows="2" maxlength="280" placeholder="Short line shown on the hologram…">${escapeHtml(text)}</textarea>
       </div>
-      <img class="hologram-image-preview${imageUrl ? "" : " hidden"}"${imageUrl ? ` src="${escapeAttr(imageUrl)}"` : ""} alt="" />
+      <div class="hologram-field hologram-image-field">
+        <label class="field-label">Image</label>
+        <div class="hologram-image-row">
+          <input class="hologram-image-input" type="file" accept="image/*" />
+          <button type="button" class="btn-tiny hologram-image-clear${imageUrl ? "" : " hidden"}">Clear image</button>
+        </div>
+        <img class="hologram-image-preview${imageUrl ? "" : " hidden"}"${imageUrl ? ` src="${escapeAttr(imageUrl)}"` : ""} alt="" />
+      </div>
     </div>`;
+}
+
+// The text and image fields only make sense for the mode that uses them, so the
+// card hides whichever half the admin just switched off. Nothing is cleared:
+// flipping back restores what was typed or uploaded.
+function updateHologramCardMode(card) {
+  if (!card) return;
+  const select = card.querySelector(".hologram-mode-select");
+  const mode = sanitizeHologramMode(select ? select.value : "", false, false, "both");
+  const textField = card.querySelector(".hologram-text-field");
+  const imageField = card.querySelector(".hologram-image-field");
+  if (textField) textField.classList.toggle("hidden", mode === "image");
+  if (imageField) imageField.classList.toggle("hidden", mode === "text");
+  const hint = card.querySelector(".hologram-mode-hint");
+  if (hint) hint.textContent = hologramModeHint(mode);
 }
 
 function updateHologramEditorState() {
@@ -1960,6 +2016,7 @@ function updateHologramEditorState() {
   cards.forEach((card, index) => {
     const label = card.querySelector(".hologram-card-label");
     if (label) label.textContent = `Sign ${index + 1}`;
+    updateHologramCardMode(card);
   });
   if (hologramModalEmpty) hologramModalEmpty.classList.toggle("hidden", cards.length > 0);
   if (btnAddHologramSign) btnAddHologramSign.disabled = cards.length >= MAX_HOLOGRAM_SIGNS;
@@ -1976,7 +2033,7 @@ function renderHologramEditor(holograms) {
 function addHologramSignCard() {
   if (!hologramModalList) return;
   if (hologramModalList.querySelectorAll(".hologram-card").length >= MAX_HOLOGRAM_SIGNS) return;
-  hologramModalList.insertAdjacentHTML("beforeend", hologramSignMarkup({ text: "", imageUrl: "" }));
+  hologramModalList.insertAdjacentHTML("beforeend", hologramSignMarkup({ text: "", imageUrl: "", mode: "both" }));
   // Adding a panel is the intent to show it, so the switch follows along.
   if (hologramModalEnabled) hologramModalEnabled.checked = true;
   updateHologramEditorState();
@@ -2027,7 +2084,9 @@ async function collectHologramsFromEditor(artworkId) {
       imageUrl = "";
     }
     if (!text && !imageUrl) continue;
-    signs.push({ text, imageUrl });
+    const modeSelect = card.querySelector(".hologram-mode-select");
+    const mode = sanitizeHologramMode(modeSelect ? modeSelect.value : "", !!text, !!imageUrl, "both");
+    signs.push({ text, imageUrl, mode });
   }
   return {
     enabled: !!(hologramModalEnabled && hologramModalEnabled.checked) && signs.length > 0,
@@ -2121,6 +2180,12 @@ if (hologramModalList) {
     clearButton.classList.add("hidden");
   });
   hologramModalList.addEventListener("change", (event) => {
+    const modeSelect = event.target.closest(".hologram-mode-select");
+    if (modeSelect) {
+      const card = modeSelect.closest(".hologram-card");
+      if (card) updateHologramCardMode(card);
+      return;
+    }
     const input = event.target.closest(".hologram-image-input");
     if (!input) return;
     const card = input.closest(".hologram-card");
