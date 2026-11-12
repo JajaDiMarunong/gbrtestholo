@@ -266,8 +266,8 @@ button.corner-fabs-right {
 .art-card.locked { cursor: pointer; }
 .art-card.locked:active { transform: scale(0.97); }
 .art-card.locked .art-card-img {
-  filter: blur(3px) saturate(0.82) brightness(0.86);
-  transform: scale(1.1);
+  filter: blur(2px) saturate(0.86) brightness(0.9);
+  transform: scale(1.06);
 }
 
 .art-card-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -577,8 +577,8 @@ button.corner-fabs-right {
 /* Locked library rows keep the photo as a hint and hold the write-up back until
    the piece has been scanned in the museum. */
 .library-card.locked .library-card-photo img {
-  filter: blur(3px) saturate(0.82) brightness(0.86);
-  transform: scale(1.16);
+  filter: blur(2px) saturate(0.86) brightness(0.9);
+  transform: scale(1.1);
 }
 .library-card.locked .library-card-info p { color: rgba(201, 168, 118, 0.82); font-style: italic; }
 .library-lock-pill {
@@ -661,8 +661,8 @@ button.corner-fabs-right {
 .locked-preview-photo img {
   position: absolute; inset: 0; width: 100%; height: 100%;
   object-fit: cover; display: block;
-  filter: blur(8px) saturate(0.82) brightness(0.86);
-  transform: scale(1.12);
+  filter: blur(5px) saturate(0.86) brightness(0.9);
+  transform: scale(1.08);
 }
 .locked-preview-fallback {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
