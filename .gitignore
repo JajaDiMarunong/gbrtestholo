@@ -1,0 +1,19 @@
+# Never commit credentials. Everything here is either generated locally or
+# belongs in the Supabase / Firebase secret stores.
+.env
+.env.*
+!.env.example
+*.local.js
+*.pem
+*.p12
+serviceAccount*.json
+*-firebase-adminsdk-*.json
+firebase-debug.log
+.firebase/
+supabase/.temp/
+supabase/.branches/
+.branches/
+node_modules/
+*.log
+.DS_Store
+Thumbs.db

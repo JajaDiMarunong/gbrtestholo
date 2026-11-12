@@ -292,7 +292,7 @@ if (window.location.search.indexOf("updated=") !== -1) {
 // No password is stored in the source: it is typed at runtime and can be
 // changed from the Account tab (or by email reset) without touching the code.
 // -------------------------------------------------------------------
-const ADMIN_EMAIL = "admin@gbrmuseum.test";
+const ADMIN_EMAIL = "jdconstantino5281@gmail.com";
 
 btnAdminLoginSubmit.addEventListener("click", async () => {
   const password = adminPasswordInput.value;
@@ -318,7 +318,7 @@ btnAdminLoginSubmit.addEventListener("click", async () => {
     console.error("[Admin] Login failed:", err);
     let msg = "Login failed";
     if (err.code === "auth/wrong-password") msg = "Incorrect password";
-    else if (err.code === "auth/user-not-found") msg = "Admin user not found. Create in Firebase Console: admin@gbrmuseum.test";
+    else if (err.code === "auth/user-not-found") msg = "Admin user not found. Create in Firebase Console: jdconstantino5281@gmail.com";
     else if (err.code === "auth/invalid-email") msg = "Invalid email format";
     else if (err.message) msg = err.message;
     adminLoginError.textContent = msg;

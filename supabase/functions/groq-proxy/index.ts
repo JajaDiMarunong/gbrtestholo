@@ -1,6 +1,6 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
 
-const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY")!;
+const GROQ_API_KEY = (Deno.env.get("GROQ_API_KEY") || "").trim();
 const PREFERRED_MODELS = [
   "openai/gpt-oss-20b",
   "openai/gpt-oss-120b",
@@ -290,6 +290,12 @@ export default {
 
     if (req.method !== "POST") {
       return errorResponse("Method not allowed", 405);
+    }
+
+    // The key lives in the GROQ_API_KEY secret, never in the source.
+    if (!GROQ_API_KEY) {
+      console.error("[groq-proxy] GROQ_API_KEY is not set");
+      return errorResponse("The museum guide is not configured right now.", 500);
     }
 
     const ip = getClientIp(req);
