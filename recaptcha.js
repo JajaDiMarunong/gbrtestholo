@@ -139,6 +139,12 @@
     return token;
   }
 
+  // Error codes this helper agrees on with the recaptcha-verify edge function.
+  // Anything else (for example the gateway's NOT_FOUND when the function has not
+  // been deployed yet) is translated from the HTTP status instead of trusted,
+  // so an infrastructure problem never looks like a rejected visitor.
+  const KNOWN_CODES = ["rejected", "low-score", "action-mismatch", "unavailable", "misconfigured"];
+
   // Runs the token through the edge function. Resolves with
   // { success, action, score, threshold, ... } or throws an Error whose `code`
   // is one of: rejected, low-score, action-mismatch, unavailable, network,
@@ -174,14 +180,17 @@
     }
 
     if (!response.ok) {
-      const code = (data && data.code) || (response.status >= 500 ? "unavailable" : "rejected");
-      throw makeError(code, (data && data.error) || `The security check failed (HTTP ${response.status}).`, {
+      const raw = data && typeof data.code === "string" ? data.code : "";
+      // 404 means the edge function is not deployed; 5xx/0 mean it is down.
+      const fallback = response.status >= 500 || response.status === 404 ? "unavailable" : "rejected";
+      throw makeError(KNOWN_CODES.includes(raw) ? raw : fallback, (data && (data.error || data.message)) || `The security check failed (HTTP ${response.status}).`, {
         status: response.status,
       });
     }
 
     if (!data || data.success !== true) {
-      throw makeError((data && data.code) || "rejected", (data && data.error) || "The security check did not pass.", {
+      const raw = data && typeof data.code === "string" ? data.code : "";
+      throw makeError(KNOWN_CODES.includes(raw) ? raw : "rejected", (data && (data.error || data.message)) || "The security check did not pass.", {
         score: data && data.score,
       });
     }
