@@ -67,6 +67,30 @@ supabase secrets set RECAPTCHA_SECRET_KEY=... --project-ref twkgioiyfjfkppzerdii
 supabase functions deploy upload-signed-url --project-ref twkgioiyfjfkppzerdii
 supabase functions deploy recaptcha-verify --project-ref twkgioiyfjfkppzerdii
 ```
+### reCAPTCHA v3 (`recaptcha-verify`)
+
+`index.html` gates the museum behind an invisible v3 check (`entry_gate`) and
+`admin.html` checks a token before Firebase sees the password (`admin_login`).
+Both call this one function, which is the only place that sees the secret.
+
+The browser posts a `text/plain` JSON body on purpose: that keeps the call a CORS
+"simple request" with no `OPTIONS` preflight. A preflight against an undeployed
+function answers `404` without `Access-Control-Allow-Headers`, which the browser
+reports as an opaque CORS failure instead of a readable error.
+
+Behaviour when the function is missing or down (`404 NOT_FOUND`, `502`, offline):
+
+- the museum still opens — visitors are never locked out of an offline-first PWA;
+- admin sign-in continues to Firebase with a "security check unavailable" note,
+  because Firebase still verifies the password;
+- a real verdict (`low-score`, `rejected`, `action-mismatch`) always blocks.
+
+So a `git push` or a hosting deploy is not enough: run the two
+`recaptcha-verify` commands above (`supabase secrets set RECAPTCHA_SECRET_KEY=…`
+and `supabase functions deploy recaptcha-verify`). Until then the browser console
+shows `404 NOT_FOUND` for that endpoint and no bot check is enforced.
+
+
 
 `upload-signed-url` now also requires an `x-upload-token` header matching
 `UPLOAD_SIGNING_TOKEN`, so the endpoint cannot be used as an open signing

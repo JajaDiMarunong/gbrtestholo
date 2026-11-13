@@ -9,8 +9,11 @@
    - The museum gate fails open when Google or the edge function cannot be
      reached, because the museum is an offline-first PWA and a network outage
      must not lock visitors out. A low score still blocks the page.
-   - The admin login calls verify() directly and fails closed: no token, no
-     sign-in. */
+   - The admin login fails closed on a verdict — a low score, a rejected token
+     or an action mismatch means no sign-in. It only degrades when the verifier
+     itself is unreachable (not deployed yet, Supabase down, no network),
+     because Firebase still checks the password and a broken verifier must not
+     lock the curator out of the panel. */
 (function () {
   "use strict";
 
@@ -158,7 +161,12 @@
     try {
       response = await window.fetch(VERIFY_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        // text/plain keeps this a CORS "simple request", so the browser sends no
+        // OPTIONS preflight. Supabase answers a preflight for an undeployed
+        // function with 404 and no Access-Control-Allow-Headers, which the
+        // browser reports as an opaque CORS failure. Without the preflight the
+        // 404 arrives as readable JSON and is handled as "unavailable".
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
         body: JSON.stringify({ token, action }),
         signal: controller.signal,
       });
@@ -205,6 +213,10 @@
     }
     if (code === "action-mismatch" || code === "rejected") {
       return "The security check did not pass. Please try again.";
+    }
+    if (isUnavailable(error)) {
+      // Never surface a gateway string such as "Requested function was not found".
+      return "The security check is unavailable right now. Please try again in a moment.";
     }
     return (error && error.message) || "The security check failed. Please try again.";
   }
@@ -306,6 +318,8 @@
     execute,
     verify,
     runGate,
+    describe,
+    isUnavailable,
     session: {
       passed: sessionPassed,
       markPassed,

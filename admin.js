@@ -296,24 +296,32 @@ const ADMIN_EMAIL = "jdconstantino5281@gmail.com";
 
 // reCAPTCHA v3 check that runs before the password is sent to Firebase. The
 // score is judged inside the recaptcha-verify edge function, so the secret
-// never reaches this page (see recaptcha.js and SECURITY.md).
+// never reaches this page (see recaptcha.js and SECURITY.md). A real verdict
+// (low score / rejected token) stops the sign-in; an unreachable verifier does
+// not, because Firebase still checks the password and a server outage must not
+// brick the admin panel.
 async function verifyAdminLoginChallenge() {
   const recaptcha = window.GBRRecaptcha;
   if (!recaptcha) {
-    throw new Error("The security check did not load. Reload the page and try again.");
+    console.warn("[Admin] reCAPTCHA helper did not load; signing in without the bot check.");
+    return;
   }
   setLoginStatus("Running the security check…");
   try {
     await recaptcha.verify(recaptcha.ACTIONS.ADMIN_LOGIN);
   } catch (err) {
     console.warn("[Admin] reCAPTCHA verification failed:", err);
+    if (recaptcha.isUnavailable(err)) {
+      setLoginStatus("Security check unavailable — signing in without it…");
+      return;
+    }
     throw new Error(describeRecaptchaError(err));
   }
   if (adminLoginStatus) adminLoginStatus.classList.add("hidden");
 }
 
 // Maps the error codes thrown by recaptcha.js onto messages the sign-in card
-// can show. This check fails closed: no verified token, no sign-in.
+// can show. These are the verdicts that block a sign-in.
 function describeRecaptchaError(err) {
   const code = err && err.code;
   if (code === "low-score") return "Security check failed: this browser was flagged as automated traffic.";
