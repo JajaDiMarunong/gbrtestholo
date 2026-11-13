@@ -19,7 +19,11 @@
 
   const SITE_KEY = "6LduFx4uAAAAAIbhUmAqwZ9Ihl9P7yQZH9qvmQln";
   const VERIFY_URL = "https://twkgioiyfjfkppzerdii.functions.supabase.co/functions/v1/recaptcha-verify";
-  const SCRIPT_SRC = `https://www.google.com/recaptcha/api.js?render=${SITE_KEY}`;
+  // badge=hidden stops Google injecting the floating "protected by reCAPTCHA"
+  // badge in the bottom-right corner. Google's terms require the attribution to
+  // stay visible to the visitor, so the gate, the Settings screen (style.css)
+  // and the admin sign-in card (admin.css) print it as plain text.
+  const SCRIPT_SRC = `https://www.google.com/recaptcha/api.js?render=${SITE_KEY}&badge=hidden`;
   const SCRIPT_ID = "gbr-recaptcha-script";
 
   // One passing score covers the rest of the tab's session (six hours), so a

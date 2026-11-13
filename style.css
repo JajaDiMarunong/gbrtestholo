@@ -1854,6 +1854,17 @@ html.recaptcha-passed .recaptcha-gate { display: none; }
   color: rgba(244, 241, 234, 0.42);
 }
 .recaptcha-gate-legal a { color: var(--frame-gold); text-decoration: none; }
+/* recaptcha.js asks for badge=hidden; this rule also covers a loader that was
+   cached before that change, so the floating badge never reappears. The
+   attribution below keeps the notice visible without the badge. */
+.grecaptcha-badge { visibility: hidden !important; opacity: 0 !important; }
+.recaptcha-attribution {
+  margin: 18px 0 0;
+  font-size: 10.5px; line-height: 1.5;
+  text-align: center;
+  color: rgba(244, 241, 234, 0.42);
+}
+.recaptcha-attribution a { color: var(--frame-gold); text-decoration: none; }
 @media (prefers-reduced-motion: reduce) {
   .recaptcha-gate-spinner { animation-duration: 2.4s; }
 }

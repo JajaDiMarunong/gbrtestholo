@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="GBR Admin" />
 <link rel="apple-touch-icon" href="./assets/logo.png" />
-<link rel="stylesheet" href="admin.css?v=16" />
+<link rel="stylesheet" href="admin.css?v=17" />
 <script src="asset-manifest.js"></script>
 <script src="offline-store.js?v=1"></script>
 <script>
@@ -48,6 +48,11 @@
         <button id="btn-install-admin-login" class="login-install-btn" type="button">Install admin app</button>
         <p id="admin-login-status" class="login-status hidden"></p>
         <p class="login-footnote">Authorized staff only. Activity is recorded for museum operations.</p>
+        <p class="login-footnote login-recaptcha-note">
+          Protected by reCAPTCHA — Google's
+          <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacy Policy</a> and
+          <a href="https://policies.google.com/terms" target="_blank" rel="noopener">Terms of Service</a> apply.
+        </p>
         <p class="login-version" id="login-version-text">—</p>
       </section>
     </div>
@@ -705,7 +710,7 @@
     firebase.initializeApp(firebaseConfig);
   </script>
 
-  <script src="recaptcha.js?v=4" defer></script>
+  <script src="recaptcha.js?v=5" defer></script>
   <script src="admin.js?v=24" defer></script>
 </body>
 </html>

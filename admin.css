@@ -335,6 +335,12 @@ svg { display: block; }
 .login-status.is-error { color: var(--danger); }
 .login-status.hidden { display: none; }
 .login-version { margin: 14px 0 0; text-align: center; color: var(--muted-2); font-size: 10.5px; letter-spacing: 0.02em; }
+/* recaptcha.js asks for badge=hidden; this rule also covers a loader that was
+   cached before that change, so the floating badge never reappears. The
+   attribution footnote keeps the notice visible without the badge. */
+.grecaptcha-badge { visibility: hidden !important; opacity: 0 !important; }
+.login-recaptcha-note { margin-top: 14px; color: var(--muted-2); font-size: 10.5px; line-height: 1.5; text-align: center; }
+.login-recaptcha-note a { color: var(--gold); text-decoration: none; }
 
 .brand-mark {
   display: flex;
