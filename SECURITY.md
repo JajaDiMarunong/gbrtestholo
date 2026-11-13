@@ -73,12 +73,14 @@ supabase functions deploy recaptcha-verify --project-ref twkgioiyfjfkppzerdii
 `admin.html` checks a token before Firebase sees the password (`admin_login`).
 Both call this one function, which is the only place that sees the secret.
 
-The browser posts a `text/plain` JSON body on purpose: that keeps the call a CORS
-"simple request" with no `OPTIONS` preflight. A preflight against an undeployed
-function answers `404` without `Access-Control-Allow-Headers`, which the browser
-reports as an opaque CORS failure instead of a readable error.
+The browser posts JSON to this function, so the call is preceded by a CORS
+preflight; `recaptcha-verify` answers `OPTIONS` with `204` plus
+`Access-Control-Allow-Headers: Content-Type, Authorization`, which is what lets
+the real `POST` through.
 
-Behaviour when the function is missing or down (`404 NOT_FOUND`, `502`, offline):
+When the function is missing (never deployed) the preflight itself returns `404`
+without CORS headers, the browser reports an opaque CORS failure, `fetch()`
+throws, and the client classifies it as `network`. Behaviour in that case:
 
 - the museum still opens — visitors are never locked out of an offline-first PWA;
 - admin sign-in continues to Firebase with a "security check unavailable" note,

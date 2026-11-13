@@ -161,12 +161,12 @@
     try {
       response = await window.fetch(VERIFY_URL, {
         method: "POST",
-        // text/plain keeps this a CORS "simple request", so the browser sends no
-        // OPTIONS preflight. Supabase answers a preflight for an undeployed
-        // function with 404 and no Access-Control-Allow-Headers, which the
-        // browser reports as an opaque CORS failure. Without the preflight the
-        // 404 arrives as readable JSON and is handled as "unavailable".
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
+        // The function speaks JSON and answers the CORS preflight (OPTIONS -> 204
+        // with Access-Control-Allow-Headers), which is what lets the browser send
+        // this POST. If the verifier is missing, the preflight fails, fetch()
+        // throws, and the caller treats it as "network": the gate fails open and
+        // admin sign-in degrades instead of blocking.
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, action }),
         signal: controller.signal,
       });
