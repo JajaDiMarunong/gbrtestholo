@@ -128,7 +128,7 @@ svg { display: block; }
 .btn-tiny.danger:hover { background: rgba(224, 107, 99, 0.2); }
 
 /* ---------------- Inputs ---------------- */
-.text-input, .note-textarea, .date-select, .date-input {
+.text-input, .note-textarea, .date-select {
   width: 100%;
   color: var(--text);
   background: var(--surface-2);
@@ -141,14 +141,13 @@ svg { display: block; }
 }
 .text-input { min-height: 44px; }
 .text-input::placeholder, .note-textarea::placeholder { color: var(--muted-2); }
-.text-input:focus, .note-textarea:focus, .date-select:focus, .date-input:focus {
+.text-input:focus, .note-textarea:focus, .date-select:focus {
   border-color: rgba(201, 168, 106, 0.7);
   box-shadow: 0 0 0 3px rgba(201, 168, 106, 0.14);
   background: #1b2028;
 }
 .note-textarea { min-height: 108px; resize: vertical; line-height: 1.55; }
 .date-select { width: auto; cursor: pointer; padding-right: 34px; }
-.date-input { width: auto; min-width: 140px; }
 
 .field-label {
   display: block;
@@ -1228,22 +1227,7 @@ body.drawer-open { overflow: hidden; }
 .admin-section-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .admin-section-actions { display: flex; flex-wrap: wrap; gap: 7px; }
 
-.date-filter-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-}
-.date-filter-label { color: var(--muted); font-size: 11px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; }
-.custom-range { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.custom-range span { color: var(--muted-2); font-size: 11px; }
-.filter-count { margin-left: auto; color: var(--gold); font-size: 11px; font-weight: 650; }
-
-.admin-list { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; }
+.admin-list { display: flex; flex-direction: column; gap: 7px; }
 .admin-row {
   display: flex;
   align-items: center;
@@ -1427,7 +1411,6 @@ body.drawer-open { overflow: hidden; }
   .admin-row-actions { width: 100%; justify-content: flex-end; }
   .admin-note-preview { width: 72px; height: 82px; }
   .date-select { width: 100%; }
-  .filter-count { margin-left: 0; }
   .artwork-row-controls { flex-wrap: wrap; padding-left: 0; }
   .artwork-row-actions { width: 100%; justify-content: flex-end; }
   .drawer-body, .artwork-drawer .panel-head, .drawer-footer { padding-left: 18px; padding-right: 18px; }

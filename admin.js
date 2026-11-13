@@ -157,23 +157,7 @@ const markerQualityRating = document.getElementById("marker-quality-rating");
 const btnTestMarker = document.getElementById("btn-test-marker");
 const markerTestStatus = document.getElementById("marker-test-status");
 
-// Date filter refs — Leaderboard
-const lbDateFilter = document.getElementById("lb-date-filter");
-const lbCustomRange = document.getElementById("lb-custom-range");
-const lbDateFrom = document.getElementById("lb-date-from");
-const lbDateTo = document.getElementById("lb-date-to");
-const lbApplyCustom = document.getElementById("lb-apply-custom");
-const lbFilterCount = document.getElementById("lb-filter-count");
-
-// Date filter refs — Notes
-const notesDateFilter = document.getElementById("notes-date-filter");
-const notesCustomRange = document.getElementById("notes-custom-range");
-const notesDateFrom = document.getElementById("notes-date-from");
-const notesDateTo = document.getElementById("notes-date-to");
-const notesApplyCustom = document.getElementById("notes-apply-custom");
-const notesFilterCount = document.getElementById("notes-filter-count");
-
-// Cached data for filtering
+// Cached data for the moderator lists
 let cachedLeaderboard = [];
 let cachedNotes = [];
 
@@ -1515,72 +1499,6 @@ visitsFilter.addEventListener("click", (e) => {
 });
 
 // =====================================================================
-// DATE FILTERING
-// =====================================================================
-function getDateRange(filterValue, customFrom, customTo) {
-  const now = new Date();
-  const DAY = 24 * 60 * 60 * 1000;
-  let start = 0;
-  let end = Infinity;
-
-  switch (filterValue) {
-    case "today": {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      start = d.getTime();
-      end = start + DAY;
-      break;
-    }
-    case "yesterday": {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-      start = d.getTime();
-      end = start + DAY;
-      break;
-    }
-    case "week": {
-      const ws = getWeekStart(now);
-      start = ws.getTime();
-      end = start + 7 * DAY;
-      break;
-    }
-    case "lastweek": {
-      const ws = getWeekStart(now);
-      start = ws.getTime() - 7 * DAY;
-      end = ws.getTime();
-      break;
-    }
-    case "month": {
-      start = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-      end = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
-      break;
-    }
-    case "lastmonth": {
-      start = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
-      end = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-      break;
-    }
-    case "custom": {
-      if (customFrom) start = new Date(customFrom).getTime();
-      if (customTo) end = new Date(customTo).getTime() + DAY - 1;
-      break;
-    }
-    default:
-      // "all" — no filter
-      start = 0;
-      end = Infinity;
-  }
-  return { start, end };
-}
-
-function filterEntriesByDate(entries, filterValue, customFrom, customTo) {
-  if (filterValue === "all") return entries;
-  const { start, end } = getDateRange(filterValue, customFrom, customTo);
-  return entries.filter(([, e]) => {
-    const ts = e.timestamp || 0;
-    return ts >= start && ts <= end;
-  });
-}
-
-// =====================================================================
 // LEADERBOARD
 // =====================================================================
 async function loadAdminLeaderboard() {
@@ -1597,22 +1515,12 @@ async function loadAdminLeaderboard() {
 }
 
 function renderLeaderboardList() {
-  const filterValue = lbDateFilter.value;
-  const customFrom = lbDateFrom.value;
-  const customTo = lbDateTo.value;
-
-  const filtered = filterEntriesByDate(cachedLeaderboard, filterValue, customFrom, customTo);
-
-  lbFilterCount.textContent = filtered.length > 0
-    ? `${filtered.length} result${filtered.length === 1 ? "" : "s"}`
-    : "No results";
-
-  if (filtered.length === 0) {
-    adminLeaderboardList.innerHTML = `<p class="leaderboard-status">No entries match this date filter.</p>`;
+  if (cachedLeaderboard.length === 0) {
+    adminLeaderboardList.innerHTML = `<p class="leaderboard-status">No completions yet.</p>`;
     return;
   }
 
-  adminLeaderboardList.innerHTML = filtered
+  adminLeaderboardList.innerHTML = cachedLeaderboard
     .map(
       ([key, e]) => `
     <div class="admin-row">
@@ -1626,15 +1534,6 @@ function renderLeaderboardList() {
 
   attachDeleteHandlers();
 }
-
-// Leaderboard date filter events
-lbDateFilter.addEventListener("change", () => {
-  const isCustom = lbDateFilter.value === "custom";
-  lbCustomRange.classList.toggle("hidden", !isCustom);
-  renderLeaderboardList();
-});
-
-lbApplyCustom.addEventListener("click", renderLeaderboardList);
 
 // =====================================================================
 // NOTES
@@ -1716,22 +1615,12 @@ document.addEventListener("keydown", (event) => {
 });
 
 function renderNotesList() {
-  const filterValue = notesDateFilter.value;
-  const customFrom = notesDateFrom.value;
-  const customTo = notesDateTo.value;
-
-  const filtered = filterEntriesByDate(cachedNotes, filterValue, customFrom, customTo);
-
-  notesFilterCount.textContent = filtered.length > 0
-    ? `${filtered.length} result${filtered.length === 1 ? "" : "s"}`
-    : "No results";
-
-  if (filtered.length === 0) {
-    adminNotesList.innerHTML = `<p class="leaderboard-status">No notes match this date filter.</p>`;
+  if (cachedNotes.length === 0) {
+    adminNotesList.innerHTML = `<p class="leaderboard-status">No notes yet.</p>`;
     return;
   }
 
-  adminNotesList.innerHTML = filtered
+  adminNotesList.innerHTML = cachedNotes
     .map(([key, note]) => {
       const type = note.type || "text";
       const isPhoto = type === "photo";
@@ -1760,15 +1649,6 @@ function renderNotesList() {
   attachDeleteHandlers();
   attachNoteViewHandlers();
 }
-
-// Notes date filter events
-notesDateFilter.addEventListener("change", () => {
-  const isCustom = notesDateFilter.value === "custom";
-  notesCustomRange.classList.toggle("hidden", !isCustom);
-  renderNotesList();
-});
-
-notesApplyCustom.addEventListener("click", renderNotesList);
 
 // =====================================================================
 // ARTWORKS

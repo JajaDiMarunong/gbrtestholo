@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="GBR Admin" />
 <link rel="apple-touch-icon" href="./assets/logo.png" />
-<link rel="stylesheet" href="admin.css?v=18" />
+<link rel="stylesheet" href="admin.css?v=19" />
 <script src="asset-manifest.js"></script>
 <script src="offline-store.js?v=1"></script>
 <script>
@@ -536,7 +536,7 @@
           <div class="section-intro">
             <div>
               <h2>Leaderboard</h2>
-              <p>Fastest collection completions, newest first when unfiltered.</p>
+              <p>Fastest collection completions.</p>
             </div>
             <div class="admin-section-actions">
               <button id="btn-export-leaderboard" class="btn-tiny">Export JSON</button>
@@ -545,27 +545,6 @@
           </div>
 
           <div class="panel table-panel">
-            <div class="date-filter-bar">
-              <span class="date-filter-label">Filter by date</span>
-              <select id="lb-date-filter" class="date-select">
-                <option value="all">All Time</option>
-                <option value="today">Today</option>
-                <option value="yesterday">Yesterday</option>
-                <option value="week">This Week</option>
-                <option value="lastweek">Last Week</option>
-                <option value="month">This Month</option>
-                <option value="lastmonth">Last Month</option>
-                <option value="custom">Custom Range…</option>
-              </select>
-              <div id="lb-custom-range" class="custom-range hidden">
-                <input type="date" id="lb-date-from" class="date-input" />
-                <span>to</span>
-                <input type="date" id="lb-date-to" class="date-input" />
-                <button id="lb-apply-custom" class="btn-tiny">Apply</button>
-              </div>
-              <span id="lb-filter-count" class="filter-count"></span>
-            </div>
-
             <div id="admin-leaderboard-list" class="admin-list"></div>
           </div>
         </section>
@@ -583,27 +562,6 @@
           </div>
 
           <div class="panel table-panel">
-            <div class="date-filter-bar">
-              <span class="date-filter-label">Filter by date</span>
-              <select id="notes-date-filter" class="date-select">
-                <option value="all">All Time</option>
-                <option value="today">Today</option>
-                <option value="yesterday">Yesterday</option>
-                <option value="week">This Week</option>
-                <option value="lastweek">Last Week</option>
-                <option value="month">This Month</option>
-                <option value="lastmonth">Last Month</option>
-                <option value="custom">Custom Range…</option>
-              </select>
-              <div id="notes-custom-range" class="custom-range hidden">
-                <input type="date" id="notes-date-from" class="date-input" />
-                <span>to</span>
-                <input type="date" id="notes-date-to" class="date-input" />
-                <button id="notes-apply-custom" class="btn-tiny">Apply</button>
-              </div>
-              <span id="notes-filter-count" class="filter-count"></span>
-            </div>
-
             <div id="admin-notes-list" class="admin-list"></div>
           </div>
         </section>
@@ -711,6 +669,6 @@
   </script>
 
   <script src="recaptcha.js?v=5" defer></script>
-  <script src="admin.js?v=25" defer></script>
+  <script src="admin.js?v=26" defer></script>
 </body>
 </html>
