@@ -414,6 +414,9 @@ window.addEventListener("mouseup", () => {
 // -------------------------------------------------------------------
 // Leaderboard
 // -------------------------------------------------------------------
+// The TV board shows the top 10 only; the admin panel keeps every entry.
+const TOP_LEADERBOARD_LIMIT = 10;
+
 async function loadLeaderboard() {
   try {
     const user = firebase.auth().currentUser;
@@ -444,7 +447,7 @@ function renderLeaderboardList() {
   }
 
   leaderboardList.innerHTML = cachedLeaderboard
-    .slice(0, 15)
+    .slice(0, TOP_LEADERBOARD_LIMIT)
     .map(([key, e], i) => {
       const rank = i + 1;
       const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;

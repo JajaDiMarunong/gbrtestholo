@@ -2486,6 +2486,10 @@ btnTakeQuiz.addEventListener("click", () => {
 // -------------------------------------------------------------------
 // Firebase: leaderboard
 // -------------------------------------------------------------------
+// Visitor-facing leaderboard is a "top 10" board; the admin panel still
+// shows every completion.
+const TOP_LEADERBOARD_LIMIT = 10;
+
 async function loadLeaderboard() {
   leaderboardList.innerHTML = `<p class="leaderboard-status">Loading…</p>`;
   try {
@@ -2501,7 +2505,7 @@ async function loadLeaderboard() {
     }
 
     leaderboardList.innerHTML = entries
-      .slice(0, 20)
+      .slice(0, TOP_LEADERBOARD_LIMIT)
       .map((e, i) => {
         const rank = i + 1;
         const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
