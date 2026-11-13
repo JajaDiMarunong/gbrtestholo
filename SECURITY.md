@@ -85,12 +85,40 @@ throws, and the client classifies it as `network`. Behaviour in that case:
 - the museum still opens — visitors are never locked out of an offline-first PWA;
 - admin sign-in continues to Firebase with a "security check unavailable" note,
   because Firebase still verifies the password;
-- a real verdict (`low-score`, `rejected`, `action-mismatch`) always blocks.
+- a real verdict (`low-score`, `rejected`, `action-mismatch`) always blocks;
+- `browser-error` — Google saying it could not evaluate the browser (automation,
+  WebView, strict privacy mode, key not allowed on that domain) — is reported as
+  `unavailable` (502), not `rejected`. It is not a bot verdict, and treating it
+  as one would lock out real visitors. Watch the function logs
+  (`[recaptcha-verify] Google could not evaluate the browser`) if it ever fires
+  for ordinary traffic: it usually means the site key's domain list is wrong.
+- a wrong or missing `RECAPTCHA_SECRET_KEY` is `misconfigured` (500), also
+  degraded, never "you are a bot".
 
 So a `git push` or a hosting deploy is not enough: run the two
 `recaptcha-verify` commands above (`supabase secrets set RECAPTCHA_SECRET_KEY=…`
 and `supabase functions deploy recaptcha-verify`). Until then the browser console
 shows `404 NOT_FOUND` for that endpoint and no bot check is enforced.
+
+To rotate the secret, make a new one next to the site key in the reCAPTCHA
+console and set it — no code change and no redeploy, because the function reads
+`Deno.env.get("RECAPTCHA_SECRET_KEY")` per request:
+
+```bash
+supabase secrets set RECAPTCHA_SECRET_KEY=<new secret> --project-ref twkgioiyfjfkppzerdii
+```
+
+Check a deployment with two requests: `OPTIONS` must answer `204` with
+`Access-Control-Allow-Headers`, and a `POST` must answer JSON (`rejected` for a
+fake token) rather than `404 NOT_FOUND` or `misconfigured`:
+
+```bash
+curl -s -o /dev/null -D - -X OPTIONS \
+  https://twkgioiyfjfkppzerdii.functions.supabase.co/functions/v1/recaptcha-verify
+curl -s -X POST -H 'Content-Type: application/json' \
+  -d '{"token":"probe","action":"admin_login"}' \
+  https://twkgioiyfjfkppzerdii.functions.supabase.co/functions/v1/recaptcha-verify
+```
 
 
 

@@ -134,6 +134,19 @@ export default {
           500,
         );
       }
+      // Codes that mean "Google could not evaluate this browser" (browser-error
+      // is undocumented and shows up for automation, WebViews and privacy
+      // browsers) are an infrastructure outcome, not a bot verdict. Treating
+      // them as `rejected` would lock real visitors out of the museum, so they
+      // degrade like an outage instead. Genuine verdicts stay below.
+      const unevaluable = new Set(["browser-error", "bad-request"]);
+      if (codes.length > 0 && codes.every((code) => unevaluable.has(code))) {
+        console.warn("[recaptcha-verify] Google could not evaluate the browser:", codes.join(", "));
+        return json(
+          { success: false, code: "unavailable", error: "Google reCAPTCHA could not evaluate this browser.", codes },
+          502,
+        );
+      }
       return json(
         { success: false, code: "rejected", error: "reCAPTCHA could not verify this browser.", codes },
         200,
