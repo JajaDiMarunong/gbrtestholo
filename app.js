@@ -234,6 +234,13 @@ function getQuizStatus(art) {
 const screenUsername = document.getElementById("screen-username");
 const usernameInput = document.getElementById("username-input");
 const btnUsernameSubmit = document.getElementById("btn-username-submit");
+const usernameStepPick = document.getElementById("username-step-pick");
+const usernameStepConfirm = document.getElementById("username-step-confirm");
+const usernameStatus = document.getElementById("username-status");
+const usernameConfirmDesc = document.getElementById("username-confirm-desc");
+const usernameConfirmName = document.getElementById("username-confirm-name");
+const btnUsernameConfirm = document.getElementById("btn-username-confirm");
+const btnUsernameCancel = document.getElementById("btn-username-cancel");
 
 const screenHome = document.getElementById("screen-home");
 const screenScanner = document.getElementById("screen-scanner");
@@ -531,19 +538,123 @@ function restoreProgress() {
   }
 }
 
-btnUsernameSubmit.addEventListener("click", submitUsername);
-usernameInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") submitUsername();
-});
+// -------------------------------------------------------------------
+// Duplicate display names
+// -------------------------------------------------------------------
+// A name is what a visitor is known by on the leaderboard and in the
+// guestbook, so two visitors should never share one. Both lists are read
+// when a name is entered; if it is taken the visitor is shown the next
+// free "Name(2), Name(3)…" and has to confirm it before it is used.
+const NAME_LENGTH_LIMIT = 20;
+const NAME_SUFFIX_PATTERN = /\s*\((\d+)\)$/;
+const NAME_LOOKUP_TIMEOUT_MS = 5000;
 
-function submitUsername() {
-  const name = usernameInput.value.trim();
-  if (!name) {
-    usernameInput.focus();
-    return;
+let pendingUsername = null;
+let usernameCheckInFlight = false;
+
+function normalizeUsername(value) {
+  return String(value || "").trim().replace(/\s+/g, " ");
+}
+
+// Reads every name in use, skipping the visitor's own entries so that
+// changing the capitalisation of your own name is never a conflict.
+// Returns null when the lists cannot be read (offline, timeout), which the
+// caller treats as "no check possible" rather than blocking entry.
+async function fetchTakenNames() {
+  const user = firebase.auth().currentUser;
+  let authParam = "";
+  try {
+    if (user) authParam = `?auth=${await user.getIdToken()}`;
+  } catch (err) {}
+
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), NAME_LOOKUP_TIMEOUT_MS);
+  try {
+    const [leaderboardRes, notesRes] = await Promise.all([
+      fetch(`${FIREBASE_URL}/leaderboard.json`, { cache: "no-store", signal: controller.signal }),
+      fetch(`${FIREBASE_URL}/notes.json${authParam}`, { cache: "no-store", signal: controller.signal }),
+    ]);
+
+    const taken = new Set();
+    const addName = (rawName, ownerUid) => {
+      const name = normalizeUsername(rawName);
+      if (!name) return;
+      if (user && ownerUid && ownerUid === user.uid) return;
+      taken.add(name.toLowerCase());
+    };
+
+    if (leaderboardRes.ok) {
+      const data = await leaderboardRes.json();
+      Object.values(data || {}).forEach((entry) => {
+        if (entry) addName(entry.name, entry.deviceId);
+      });
+    }
+    if (notesRes.ok) {
+      const data = await notesRes.json();
+      Object.entries(data || {}).forEach(([ownerUid, note]) => {
+        if (note) addName(note.name, ownerUid);
+      });
+    }
+    return taken;
+  } catch (err) {
+    // Offline museum visits still work; the name check simply never ran.
+    console.warn("[Username] Could not read the existing names:", err);
+    return null;
+  } finally {
+    window.clearTimeout(timeout);
   }
+}
+
+// "Nathan" -> "Nathan(2)" -> "Nathan(3)" … Names already typed with a
+// number keep counting from it, so "Nathan(2)" becomes "Nathan(3)".
+function nextAvailableName(desired, taken) {
+  const trimmed = normalizeUsername(desired);
+  const suffixMatch = trimmed.match(NAME_SUFFIX_PATTERN);
+  const root = (suffixMatch ? trimmed.replace(NAME_SUFFIX_PATTERN, "") : trimmed).trim() || trimmed;
+  const isTaken = (value) => taken.has(value.trim().toLowerCase());
+
+  if (!isTaken(trimmed)) return { name: trimmed, conflict: false };
+
+  let n = suffixMatch ? Math.max(2, Number(suffixMatch[1]) + 1) : 2;
+  while (n < 1000) {
+    const suffix = `(${n})`;
+    // The input stops at 20 characters, so the root is shortened when the
+    // suffix would push the confirmed name past that budget.
+    const allowedRoot = Math.max(1, NAME_LENGTH_LIMIT - suffix.length);
+    const candidate = `${root.slice(0, allowedRoot).trimEnd()}${suffix}`;
+    if (!isTaken(candidate)) return { name: candidate, conflict: true };
+    n += 1;
+  }
+  return { name: `${root.slice(0, NAME_LENGTH_LIMIT - 6)}(${Date.now() % 1000})`, conflict: true };
+}
+
+function setUsernameChecking(checking) {
+  btnUsernameSubmit.disabled = checking;
+  btnUsernameSubmit.textContent = checking ? "Checking name…" : "Enter Gallery";
+  usernameStatus.textContent = checking ? "Checking whether that name is free…" : "";
+  usernameStatus.classList.toggle("hidden", !checking);
+}
+
+function showUsernameConflict(desired, suggestion) {
+  pendingUsername = suggestion;
+  usernameConfirmDesc.textContent = `“${desired}” is already used by another visitor. Your name will be shown as:`;
+  usernameConfirmName.textContent = suggestion;
+  usernameStatus.classList.add("hidden");
+  usernameStepPick.classList.add("hidden");
+  usernameStepConfirm.classList.remove("hidden");
+  btnUsernameConfirm.focus();
+}
+
+function closeUsernameConflict() {
+  pendingUsername = null;
+  usernameStepConfirm.classList.add("hidden");
+  usernameStepPick.classList.remove("hidden");
+}
+
+function applyUsername(name) {
   currentUsername = name;
   persistProgress();
+  closeUsernameConflict();
   screenUsername.classList.add("hidden");
   if (returningToScreenAfterNameChange) {
     returningToScreenAfterNameChange();
@@ -554,12 +665,67 @@ function submitUsername() {
   }
 }
 
+btnUsernameSubmit.addEventListener("click", submitUsername);
+usernameInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") submitUsername();
+});
+
+async function submitUsername() {
+  if (usernameCheckInFlight) return;
+  const desired = normalizeUsername(usernameInput.value);
+  if (!desired) {
+    usernameInput.focus();
+    return;
+  }
+
+  usernameCheckInFlight = true;
+  setUsernameChecking(true);
+  let taken = null;
+  try {
+    taken = await fetchTakenNames();
+  } finally {
+    usernameCheckInFlight = false;
+    setUsernameChecking(false);
+  }
+
+  const chosen = taken ? nextAvailableName(desired, taken) : { name: desired, conflict: false };
+  if (chosen.conflict) {
+    showUsernameConflict(desired, chosen.name);
+    return;
+  }
+  applyUsername(chosen.name);
+}
+
+btnUsernameConfirm.addEventListener("click", () => {
+  if (!pendingUsername) return;
+  applyUsername(pendingUsername);
+});
+btnUsernameCancel.addEventListener("click", () => {
+  closeUsernameConflict();
+  usernameInput.focus();
+  usernameInput.select();
+});
+usernameStepConfirm.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    e.preventDefault();
+    btnUsernameCancel.click();
+    return;
+  }
+  // Enter on either button keeps its native click; the guard only swallows a
+  // stray Enter that lands on the card itself.
+  if (e.key === "Enter" && !e.target.closest?.("button")) e.preventDefault();
+});
+
 let returningToScreenAfterNameChange = null;
 
 settingsChangeName.addEventListener("click", () => {
   usernameInput.value = currentUsername || "";
   returningToScreenAfterNameChange = showSettings;
+  closeUsernameConflict();
+  setUsernameChecking(false);
   screenUsername.classList.remove("hidden");
+  usernameInput.focus();
+  usernameInput.select();
 });
 settingsReplayTutorial.addEventListener("click", () => {
   localStorage.removeItem("museum_tour_seen");

@@ -1419,6 +1419,30 @@ button.corner-fabs-right {
 .modal-desc { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin: 0 0 6px 0; }
 .modal-actions { display: flex; gap: 10px; margin-top: 14px; }
 
+/* ---- username modal ---- */
+/* Both the name field and the duplicate-name confirmation live in one card,
+   so confirming a suggestion never stacks a second overlay on the first.
+   Plain <div>s have no display rule of their own, so each step that can be
+   hidden needs its own two-class rule. */
+.username-step.hidden { display: none; }
+.username-status {
+  font-size: 12px; color: var(--text-dim); line-height: 1.4;
+  margin: -6px 0 10px 0;
+}
+.username-status.hidden { display: none; }
+/* The suggested name is the point of the confirmation, so it is set as a
+   gold plate rather than blended into the paragraph around it. */
+.username-confirm-name {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 22px; line-height: 1.25; color: var(--frame-gold);
+  background: rgba(201, 168, 118, 0.14);
+  border: 1px solid rgba(201, 168, 118, 0.45);
+  border-radius: 12px; padding: 12px 14px; margin: 12px 0 10px 0;
+  overflow-wrap: anywhere;
+}
+.username-confirm .modal-actions { margin-top: 16px; }
+.username-confirm .modal-actions .btn-primary { margin-top: 0; }
+
 .badge-toast {
   position: fixed; top: max(20px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
   z-index: 25; background: var(--frame-gold); color: #201a10;

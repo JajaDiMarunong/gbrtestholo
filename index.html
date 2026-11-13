@@ -14,7 +14,7 @@
 <meta name="description" content="Augmented reality digital companion and collection experience for the GBR Jr. Museum." />
 <meta property="og:title" content="GBR Jr. Museum AR" />
 <meta property="og:description" content="Augmented reality digital companion and collection experience for the GBR Jr. Museum." />
-<link rel="stylesheet" href="style.css?v=47" />
+<link rel="stylesheet" href="style.css?v=48" />
 <link rel="manifest" href="manifest.webmanifest" />
 <meta name="theme-color" content="#1a1310" />
 <meta name="mobile-web-app-capable" content="yes" />
@@ -78,11 +78,30 @@
 
   <div id="screen-username" class="modal-overlay">
     <div class="modal-card">
-      <p class="modal-eyebrow">Welcome</p>
-      <h2>What should we call you?</h2>
-      <p class="modal-desc">This name is used on the leaderboard and on any notes you leave.</p>
-      <input id="username-input" class="text-input" type="text" maxlength="20" placeholder="Your name" />
-      <button id="btn-username-submit" class="btn-primary">Enter Gallery</button>
+      <!-- Step 1: the visitor types a name. It only leaves this step once the
+           name is free, or once the visitor confirms the suggested suffix in
+           step 2. -->
+      <div id="username-step-pick" class="username-step">
+        <p class="modal-eyebrow">Welcome</p>
+        <h2>What should we call you?</h2>
+        <p class="modal-desc">This name is used on the leaderboard and on any notes you leave.</p>
+        <input id="username-input" class="text-input" type="text" maxlength="20" placeholder="Your name" autocomplete="nickname" />
+        <p id="username-status" class="username-status hidden" role="status" aria-live="polite"></p>
+        <button id="btn-username-submit" class="btn-primary" type="button">Enter Gallery</button>
+      </div>
+      <!-- Step 2: the typed name is already in use, so the next free
+           "Name(2), Name(3)…" is spelled out and must be confirmed. -->
+      <div id="username-step-confirm" class="username-step username-confirm hidden" role="alertdialog" aria-labelledby="username-confirm-title" aria-describedby="username-confirm-desc">
+        <p class="modal-eyebrow">Name already taken</p>
+        <h2 id="username-confirm-title">That name is taken</h2>
+        <p id="username-confirm-desc" class="modal-desc">Someone already uses that name. Your name will be shown as:</p>
+        <p id="username-confirm-name" class="username-confirm-name">—</p>
+        <p class="modal-desc">Is that the name you want to be known by?</p>
+        <div class="modal-actions">
+          <button id="btn-username-cancel" class="btn-secondary" type="button">Change it</button>
+          <button id="btn-username-confirm" class="btn-primary" type="button">Yes, use it</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -605,6 +624,6 @@
   </script>
 
   <script src="recaptcha.js?v=5" defer></script>
-  <script src="app.js?v=62" defer></script>
+  <script src="app.js?v=63" defer></script>
 </body>
 </html>
