@@ -5328,8 +5328,24 @@ function exitImmersive() {
 // =====================================================================
 // BOOT
 // =====================================================================
+// reCAPTCHA v3 gate (recaptcha.js). The museum does not start — no visit is
+// recorded and the camera is not requested — until Google has scored this
+// browser and the recaptcha-verify function accepted the token. Tabs that
+// already passed skip the check for six hours; an offline tab fails open so
+// the museum still works without a connection.
+async function runEntryGate() {
+  const recaptcha = window.GBRRecaptcha;
+  if (!recaptcha) {
+    console.warn("[reCAPTCHA] Helper did not load; the entry gate is skipped.");
+    return { verified: false, reason: "missing-helper" };
+  }
+  return recaptcha.runGate({ action: recaptcha.ACTIONS.ENTRY_GATE });
+}
+
 async function bootMuseum() {
   try {
+    await runEntryGate();
+
     if (window.MuseumOffline) {
       loadingText.textContent = "Downloading museum for offline use…";
       await window.MuseumOffline.preloadAssets(({ completed, total, failed }) => {

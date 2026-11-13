@@ -294,6 +294,35 @@ if (window.location.search.indexOf("updated=") !== -1) {
 // -------------------------------------------------------------------
 const ADMIN_EMAIL = "jdconstantino5281@gmail.com";
 
+// reCAPTCHA v3 check that runs before the password is sent to Firebase. The
+// score is judged inside the recaptcha-verify edge function, so the secret
+// never reaches this page (see recaptcha.js and SECURITY.md).
+async function verifyAdminLoginChallenge() {
+  const recaptcha = window.GBRRecaptcha;
+  if (!recaptcha) {
+    throw new Error("The security check did not load. Reload the page and try again.");
+  }
+  setLoginStatus("Running the security check…");
+  try {
+    await recaptcha.verify(recaptcha.ACTIONS.ADMIN_LOGIN);
+  } catch (err) {
+    console.warn("[Admin] reCAPTCHA verification failed:", err);
+    throw new Error(describeRecaptchaError(err));
+  }
+  if (adminLoginStatus) adminLoginStatus.classList.add("hidden");
+}
+
+// Maps the error codes thrown by recaptcha.js onto messages the sign-in card
+// can show. This check fails closed: no verified token, no sign-in.
+function describeRecaptchaError(err) {
+  const code = err && err.code;
+  if (code === "low-score") return "Security check failed: this browser was flagged as automated traffic.";
+  if (code === "action-mismatch" || code === "rejected") return "Security check failed. Reload the page and try again.";
+  if (code === "timeout" || code === "network") return "Security check timed out. Check the connection and try again.";
+  if (code === "unavailable" || code === "misconfigured") return "The security check is unavailable right now. Try again in a moment.";
+  return (err && err.message) || "The security check failed. Try again.";
+}
+
 btnAdminLoginSubmit.addEventListener("click", async () => {
   const password = adminPasswordInput.value;
   if (!password) {
@@ -304,6 +333,7 @@ btnAdminLoginSubmit.addEventListener("click", async () => {
   adminLoginError.classList.add("hidden");
   console.log("[Admin] Signing in with email:", ADMIN_EMAIL);
   try {
+    await verifyAdminLoginChallenge();
     await firebase.auth().signInWithEmailAndPassword(ADMIN_EMAIL, password);
     const user = firebase.auth().currentUser;
     console.log("[Admin] Signed in as:", user?.uid);
@@ -316,6 +346,7 @@ btnAdminLoginSubmit.addEventListener("click", async () => {
     loadAllData();
   } catch (err) {
     console.error("[Admin] Login failed:", err);
+    if (adminLoginStatus) adminLoginStatus.classList.add("hidden");
     let msg = "Login failed";
     if (err.code === "auth/wrong-password") msg = "Incorrect password";
     else if (err.code === "auth/user-not-found") msg = "Admin user not found. Create in Firebase Console: jdconstantino5281@gmail.com";

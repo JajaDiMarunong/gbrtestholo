@@ -52,6 +52,8 @@ about tidiness rather than safety.
 | `TAVILY_API_KEY` | Supabase function secret | `learn-more` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase function secret | `upload-signed-url` |
 | `UPLOAD_SIGNING_TOKEN` | Supabase function secret | `upload-signed-url` |
+| `RECAPTCHA_SECRET_KEY` | Supabase function secret | `recaptcha-verify` |
+| `RECAPTCHA_MIN_SCORE` (optional, default `0.4`) | Supabase function secret | `recaptcha-verify` |
 
 Edge functions read them with `Deno.env.get(...)` and fail loudly (500 with a
 clean message, no key or stack trace in the response) when a secret is missing.
@@ -61,7 +63,9 @@ supabase secrets set GROQ_API_KEY=gsk_... TAVILY_API_KEY=tvly-... \
   --project-ref twkgioiyfjfkppzerdii
 supabase secrets set SUPABASE_SERVICE_ROLE_KEY=... UPLOAD_SIGNING_TOKEN=... \
   --project-ref twkgioiyfjfkppzerdii
+supabase secrets set RECAPTCHA_SECRET_KEY=... --project-ref twkgioiyfjfkppzerdii
 supabase functions deploy upload-signed-url --project-ref twkgioiyfjfkppzerdii
+supabase functions deploy recaptcha-verify --project-ref twkgioiyfjfkppzerdii
 ```
 
 `upload-signed-url` now also requires an `x-upload-token` header matching
@@ -79,6 +83,10 @@ These are in the HTML/JS on purpose and are not secrets:
   controlled by `firebase.rules.json`, not by hiding the key.
 - **Supabase publishable key** `sb_publishable_…` (`admin.js`). Supabase's
   replacement for the anonymous JWT. Access is controlled by RLS policies.
+- **reCAPTCHA v3 site key** `6LduFx4u…` (`recaptcha.js`). A domain-bound public
+  identifier; the matching secret is `RECAPTCHA_SECRET_KEY` above. The key must
+  list every hosting domain (`*.web.app`, `*.firebaseapp.com`, localhost) in
+  the reCAPTCHA admin console, or `grecaptcha.execute()` rejects the page.
 
 Never ship `service_role`, `sb_secret_…`, a Firebase service-account JSON, or
 any third-party API key (Groq, Tavily) — those go in the secret stores above.

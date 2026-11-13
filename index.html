@@ -14,7 +14,7 @@
 <meta name="description" content="Augmented reality digital companion and collection experience for the GBR Jr. Museum." />
 <meta property="og:title" content="GBR Jr. Museum AR" />
 <meta property="og:description" content="Augmented reality digital companion and collection experience for the GBR Jr. Museum." />
-<link rel="stylesheet" href="style.css?v=45" />
+<link rel="stylesheet" href="style.css?v=46" />
 <link rel="manifest" href="manifest.webmanifest" />
 <meta name="theme-color" content="#1a1310" />
 <meta name="mobile-web-app-capable" content="yes" />
@@ -42,8 +42,32 @@
 <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js" defer></script>
 <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.0.0/dist/aframe-extras.min.js" defer></script>
 <base target="_blank">
+<script>
+  // A tab that already passed the reCAPTCHA gate must not flash the overlay on
+  // reload. recaptcha.js writes the same key and expiry format.
+  try {
+    if (Number(sessionStorage.getItem("gbr.recaptcha.expires")) > Date.now()) {
+      document.documentElement.classList.add("recaptcha-passed");
+    }
+  } catch (err) {}
+</script>
 </head>
 <body>
+
+  <!-- reCAPTCHA v3 entry gate: covers the museum until Google scores the
+       browser (see recaptcha.js). Tabs that already passed skip it. -->
+  <div id="recaptcha-gate" class="recaptcha-gate" role="dialog" aria-modal="true" aria-labelledby="recaptcha-gate-title">
+    <div class="recaptcha-gate-card">
+      <div class="recaptcha-gate-mark" aria-hidden="true">GBR</div>
+      <p class="modal-eyebrow">Security check</p>
+      <h2 id="recaptcha-gate-title">Verifying your browser</h2>
+      <p class="modal-desc">This quick check keeps automated traffic away from the museum. It takes about a second.</p>
+      <div class="recaptcha-gate-spinner" aria-hidden="true"></div>
+      <p id="recaptcha-gate-status" class="recaptcha-gate-status" aria-live="polite">Contacting Google reCAPTCHA…</p>
+      <button id="recaptcha-gate-retry" class="btn-primary hidden" type="button">Try again</button>
+      <p class="recaptcha-gate-legal">Protected by reCAPTCHA — Google's <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacy Policy</a> and <a href="https://policies.google.com/terms" target="_blank" rel="noopener">Terms of Service</a> apply.</p>
+    </div>
+  </div>
 
   <div id="ar-container"></div>
 
@@ -574,6 +598,7 @@
     firebase.initializeApp(firebaseConfig);
   </script>
 
-  <script src="app.js?v=61" defer></script>
+  <script src="recaptcha.js?v=1" defer></script>
+  <script src="app.js?v=62" defer></script>
 </body>
 </html>

@@ -1,9 +1,12 @@
 importScripts("./asset-manifest.js");
 
-const CACHE_NAME = "gbr-museum-assets-v41";
-const DATA_CACHE = "gbr-museum-runtime-v41";
+const CACHE_NAME = "gbr-museum-assets-v42";
+const DATA_CACHE = "gbr-museum-runtime-v42";
 
-const CSP_HEADER = "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net https://aframe.io https://www.gstatic.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' blob: https://*.firebasedatabase.app https://*.supabase.co https://twkgioiyfjfkppzerdii.functions.supabase.co https://cdn.jsdelivr.net https://www.gstatic.com https://aframe.io https://gbrmuseumtest.firebaseapp.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://twkgioiyfjfkppzerdii.supabase.co wss://*.firebasedatabase.app; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+// reCAPTCHA v3 (recaptcha.js) needs google.com for its loader script, its
+// hidden anchor iframe and its badge image; siteverify itself is called from
+// the recaptcha-verify edge function, not from the page.
+const CSP_HEADER = "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net https://aframe.io https://www.gstatic.com https://www.google.com https://recaptcha.google.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co https://www.gstatic.com https://www.google.com https://recaptcha.google.com; connect-src 'self' blob: https://*.firebasedatabase.app https://*.supabase.co https://twkgioiyfjfkppzerdii.functions.supabase.co https://cdn.jsdelivr.net https://www.gstatic.com https://aframe.io https://gbrmuseumtest.firebaseapp.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://twkgioiyfjfkppzerdii.supabase.co https://www.google.com https://recaptcha.google.com wss://*.firebasedatabase.app; frame-src https://www.google.com https://recaptcha.google.com; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
 
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {

@@ -466,3 +466,11 @@ import_map = "./functions/learn-more/deno.json"
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
 entrypoint = "./functions/learn-more/index.ts"
 
+[functions.recaptcha-verify]
+enabled = true
+verify_jwt = false
+import_map = "./functions/recaptcha-verify/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/recaptcha-verify/index.ts"
+
