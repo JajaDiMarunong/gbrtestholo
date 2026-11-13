@@ -1618,7 +1618,6 @@ function renderLeaderboardList() {
     <div class="admin-row">
       <div class="admin-row-info">
         <div class="admin-row-name">${escapeHtml(e.name || "Anonymous")} — ${formatTime(e.time)}</div>
-        <div class="admin-row-date">${formatDateFull(e.timestamp)}</div>
       </div>
       <button class="admin-delete-btn" data-path="leaderboard/${key}" data-label="this leaderboard entry">Delete</button>
     </div>`
@@ -1693,8 +1692,7 @@ function openAdminNoteView(note) {
   } else {
     adminNoteViewContent.innerHTML = `<p>${escapeHtml(note.text || "")}</p>`;
   }
-  const dateStr = formatDateFull(note.timestamp);
-  adminNoteViewName.textContent = `${noteTypeLabel(type)} · ${note.name || "Anonymous"}${dateStr ? " · " + dateStr : ""}`;
+  adminNoteViewName.textContent = `${noteTypeLabel(type)} · ${note.name || "Anonymous"}`;
   adminNoteViewModal.classList.remove("hidden");
 }
 
@@ -1750,7 +1748,6 @@ function renderNotesList() {
       <div class="admin-row-info">
         <div class="admin-row-name">${escapeHtml(note.name || "Anonymous")}</div>
         <div class="admin-row-meta">${summary}</div>
-        <div class="admin-row-date">${formatDateFull(note.timestamp)}</div>
       </div>
       <div class="admin-row-actions">
         <button type="button" class="btn-tiny admin-note-view-btn" data-note-view="${escapeAttr(key)}">View</button>
@@ -3158,14 +3155,6 @@ function formatTime(seconds) {
   const m = Math.floor(s / 60);
   const r = s % 60;
   return m > 0 ? `${m}m ${r}s` : `${r}s`;
-}
-
-function formatDateFull(timestamp) {
-  if (!timestamp) return "";
-  const d = new Date(timestamp);
-  const datePart = d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-  const timePart = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  return `${datePart} · ${timePart}`;
 }
 
 function escapeHtml(str) {
