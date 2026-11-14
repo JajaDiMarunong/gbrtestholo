@@ -564,6 +564,50 @@ if (navigator.storage && typeof navigator.storage.persist === "function" && !/fi
   navigator.storage.persist().catch(() => {});
 }
 
+// A relaunch on a dead connection can leave the catalog empty: the visit is
+// still on the device, but there is nothing to hang it on. When the phone finds
+// a network again the catalog is fetched once more and the restored visit is
+// painted, so the visitor does not have to close and reopen the app.
+let catalogLoadPromise = null;
+let catalogReloadChain = Promise.resolve();
+
+// Boot and the reconnect handler share one load. Two overlapping loads finish in
+// whatever order the network decides, and the slower one would then put its
+// (possibly empty) list over the fresher one.
+function loadArtworkCatalog() {
+  if (!catalogLoadPromise) {
+    catalogLoadPromise = initArtworks().then(
+      () => { catalogLoadPromise = null; },
+      (error) => { catalogLoadPromise = null; throw error; }
+    );
+  }
+  return catalogLoadPromise;
+}
+
+// Attempts are queued instead of dropped, so a second `online` that arrives
+// while the first fetch is still running cannot swallow the retry.
+window.addEventListener("online", () => {
+  catalogReloadChain = catalogReloadChain.then(async () => {
+    if (artworks.length) return;
+    // Let a load that boot started finish, then try once more if it came back empty.
+    if (catalogLoadPromise) {
+      try { await catalogLoadPromise; } catch (_) {}
+    }
+    if (artworks.length) return;
+    try {
+      await loadArtworkCatalog();
+    } catch (error) {
+      console.warn("Could not reload the gallery after reconnecting:", error);
+      return;
+    }
+    if (!artworks.length) return;
+    restoreProgress();
+    checkAllUnlockedBadge();
+    checkAllQuizzesBadge();
+    if (!screenHome.classList.contains("hidden")) renderGallery();
+  }).catch(() => {});
+});
+
 // -------------------------------------------------------------------
 // Duplicate display names
 // -------------------------------------------------------------------
@@ -5814,7 +5858,7 @@ async function bootMuseum() {
 
     recordVisit();
     startPresenceHeartbeat();
-    await initArtworks();
+    await loadArtworkCatalog();
     restoreProgress();
     checkAllUnlockedBadge();
     checkAllQuizzesBadge();
