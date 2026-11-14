@@ -360,6 +360,7 @@ const settingsChangeName = document.getElementById("settings-change-name");
 const settingsReplayTutorial = document.getElementById("settings-replay-tutorial");
 const settingsVersionText = document.getElementById("settings-version-text");
 const settingsUpdateStatus = document.getElementById("settings-update-status");
+const settingsProgressText = document.getElementById("settings-progress-text");
 const btnCheckUpdates = document.getElementById("btn-check-updates");
 
 const leaderboardList = document.getElementById("leaderboard-list");
@@ -465,50 +466,102 @@ let finalElapsedSeconds = null;
 let leaderboardSubmitted = false;
 const PROGRESS_STORAGE_KEY = "museum_progress_v1";
 
+// The copy on the device is the record of the visit, so it is merged with what
+// this session knows rather than rebuilt from the artwork list. A relaunch can
+// hand back an empty catalog — no connection and nothing cached, or a piece an
+// admin unpublished for a while — and rebuilding from that list would erase the
+// visit the visitor already earned. Nothing here clears an entry, so a refused
+// write can only cost the newest change, never the visit.
+function readStoredProgress() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PROGRESS_STORAGE_KEY) || "null");
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 function persistProgress() {
+  const stored = readStoredProgress();
+  const unlocked = new Set(stored && Array.isArray(stored.unlocked) ? stored.unlocked : []);
+  const quizCompleted = new Set(stored && Array.isArray(stored.quizCompleted) ? stored.quizCompleted : []);
+  artworks.forEach((art) => {
+    if (art.unlocked) unlocked.add(art.id);
+    if (art.quizCompleted) quizCompleted.add(art.id);
+  });
+  // Best score per artwork, so a retake can show whether it improved. A newer
+  // run always replaces the score it beat; an older one only fills a gap.
+  const quizBest = { ...(stored && stored.quizBest ? stored.quizBest : {}) };
+  artworks.forEach((art) => {
+    if (art.quizBest && Number.isFinite(art.quizBest.correct)) {
+      quizBest[art.id] = { correct: art.quizBest.correct, total: art.quizBest.total };
+    }
+  });
+  const earnedBadges = { ...(stored && stored.badges ? stored.badges : {}) };
+  Object.entries(badges).forEach(([key, badge]) => {
+    if (badge.earned) earnedBadges[key] = true;
+  });
+
   const progress = {
-    username: currentUsername,
-    unlocked: artworks.filter((art) => art.unlocked).map((art) => art.id),
-    quizCompleted: artworks.filter((art) => art.quizCompleted).map((art) => art.id),
-    // Best score per artwork, so a retake can show whether it improved. Older
-    // saves simply have no key here and restore without a best score.
-    quizBest: Object.fromEntries(
-      artworks.filter((art) => art.quizBest).map((art) => [art.id, art.quizBest])
-    ),
-    badges: Object.fromEntries(Object.entries(badges).map(([key, badge]) => [key, badge.earned])),
-    sessionStartTime,
-    finalElapsedSeconds,
-    leaderboardSubmitted
+    username: currentUsername || (stored && stored.username) || null,
+    unlocked: [...unlocked],
+    quizCompleted: [...quizCompleted],
+    quizBest,
+    badges: earnedBadges,
+    sessionStartTime: sessionStartTime || (stored && stored.sessionStartTime) || null,
+    finalElapsedSeconds: finalElapsedSeconds ?? (stored ? stored.finalElapsedSeconds ?? null : null),
+    leaderboardSubmitted: leaderboardSubmitted || Boolean(stored && stored.leaderboardSubmitted)
   };
-  localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progress));
+
+  try {
+    localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progress));
+    return true;
+  } catch (error) {
+    // Storage refused (private mode, full quota, blocked storage). The visit
+    // keeps working; only the copy on the device is missing.
+    console.warn("Could not save museum progress:", error);
+    return false;
+  }
 }
 
 function restoreProgress() {
-  try {
-    const progress = JSON.parse(localStorage.getItem(PROGRESS_STORAGE_KEY) || "null");
-    if (!progress) return;
-    currentUsername = progress.username || null;
-    sessionStartTime = progress.sessionStartTime || null;
-    finalElapsedSeconds = progress.finalElapsedSeconds ?? null;
-    leaderboardSubmitted = Boolean(progress.leaderboardSubmitted);
-    const unlocked = new Set(progress.unlocked || []);
-    const quizCompleted = new Set(progress.quizCompleted || []);
-    const quizBest = progress.quizBest || {};
-    artworks.forEach((art) => {
-      art.unlocked = unlocked.has(art.id);
-      art.quizCompleted = quizCompleted.has(art.id);
-      const best = quizBest[art.id];
-      art.quizBest = best && Number.isFinite(best.correct) ? {
-        correct: best.correct,
-        total: Number(best.total) || (art.quiz ? art.quiz.length : 0)
-      } : null;
-    });
-    Object.entries(progress.badges || {}).forEach(([key, earned]) => {
-      if (badges[key]) badges[key].earned = Boolean(earned);
-    });
-  } catch (error) {
-    console.warn("Could not restore saved museum progress:", error);
-  }
+  const progress = readStoredProgress();
+  if (!progress) return false;
+  currentUsername = progress.username || null;
+  sessionStartTime = progress.sessionStartTime || null;
+  finalElapsedSeconds = progress.finalElapsedSeconds ?? null;
+  leaderboardSubmitted = Boolean(progress.leaderboardSubmitted);
+  const unlocked = new Set(progress.unlocked || []);
+  const quizCompleted = new Set(progress.quizCompleted || []);
+  const quizBest = progress.quizBest || {};
+  artworks.forEach((art) => {
+    art.unlocked = unlocked.has(art.id);
+    art.quizCompleted = quizCompleted.has(art.id);
+    const best = quizBest[art.id];
+    art.quizBest = best && Number.isFinite(best.correct) ? {
+      correct: best.correct,
+      total: Number(best.total) || (art.quiz ? art.quiz.length : 0)
+    } : null;
+  });
+  Object.entries(progress.badges || {}).forEach(([key, earned]) => {
+    if (badges[key]) badges[key].earned = Boolean(earned);
+  });
+  return true;
+}
+
+// An installed iOS app is suspended and killed without running `unload`, so the
+// record is written whenever the page is hidden as well as after every action.
+// Doing it here is free: persistProgress() only ever merges.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") persistProgress();
+});
+window.addEventListener("pagehide", () => persistProgress());
+
+// Ask the browser to keep this origin out of eviction. Chrome grants silently to
+// a site that is actually used and Safari answers without a prompt; Firefox asks
+// the visitor first, which is not worth a modal inside the museum.
+if (navigator.storage && typeof navigator.storage.persist === "function" && !/firefox/i.test(navigator.userAgent)) {
+  navigator.storage.persist().catch(() => {});
 }
 
 // -------------------------------------------------------------------
@@ -1027,6 +1080,22 @@ function renderAppVersionInfo() {
   if (settingsVersionText) settingsVersionText.textContent = appVersionLabel();
 }
 
+// Answers the question Settings gets asked most on a phone ("did it save my
+// visit?"), and shows the counts stored on this device right now.
+function renderSavedProgress() {
+  if (!settingsProgressText) return;
+  const stored = readStoredProgress();
+  const unlocked = stored && Array.isArray(stored.unlocked) ? stored.unlocked.length : 0;
+  const quizzes = stored && Array.isArray(stored.quizCompleted) ? stored.quizCompleted.length : 0;
+  if (!unlocked && !quizzes) {
+    settingsProgressText.textContent = "Nothing saved on this device yet";
+    return;
+  }
+  const pieces = `${unlocked} piece${unlocked === 1 ? "" : "s"} unlocked`;
+  const quizText = quizzes ? ` · ${quizzes} ${quizzes === 1 ? "quiz" : "quizzes"} finished` : "";
+  settingsProgressText.textContent = `On this device: ${pieces}${quizText}`;
+}
+
 async function checkForAppUpdates() {
   if (!btnCheckUpdates) return;
   btnCheckUpdates.disabled = true;
@@ -1092,6 +1161,7 @@ function showSettings() {
   animateScreenIn(screenSettings, "enter-top");
   settingsCurrentName.textContent = `Currently: ${currentUsername || "—"}`;
   renderAppVersionInfo();
+  renderSavedProgress();
   // One automatic check per page load keeps the status honest without asking
   // the host every single time Settings is opened.
   if (!appUpdateCheckDone) checkForAppUpdates();
