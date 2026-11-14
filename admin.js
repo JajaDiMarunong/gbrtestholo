@@ -1,12 +1,3 @@
-// ══════════════════════════════════════════════════════════════════════
-//  ADMIN CONSOLE — admin.js
-//
-//  Dito nag-a-upload at nag-e-edit ng artworks yung staff, at dito rin
-//  pinupublish yung AR bundle na ginagamit ng scanner ng bisita.
-//
-//  TANGINA INGAT SA PUBLISH. Yung nasa admin, nakikita agad ng mga bisita.
-//  I-check mo yung art bago mo i-save.
-// ══════════════════════════════════════════════════════════════════════
 const FIREBASE_URL = "https://gbrmuseumtest-default-rtdb.asia-southeast1.firebasedatabase.app";
 const EDGE_FUNCTIONS_BASE = "https://twkgioiyfjfkppzerdii.functions.supabase.co/functions/v1";
 const GROQ_PROXY_URL = `${EDGE_FUNCTIONS_BASE}/groq-proxy`;
@@ -2820,9 +2811,6 @@ async function loadCompilerImage(url) {
   return downscaleImage(image, 700);
 }
 
-// Dito pinupublish yung AR bundle: kinukuha lahat ng published at scannable na
-// art, pinagsasama yung mga target image, tapos ina-upload sa Supabase.
-// Pag nasa app ka at hindi gumagana yung scanner, dito mo unang tingnan.
 async function publishArBundle() {
   if (!window.MINDAR?.IMAGE?.Compiler) throw new Error("MindAR compiler is still loading. Try again in a moment.");
   const uploaded = await fetchUploadedArtworks();

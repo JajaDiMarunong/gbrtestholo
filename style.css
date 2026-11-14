@@ -14,15 +14,6 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-/* ---------------- kiosk input behaviour ----------------
-   A visitor resting a thumb on a postcard, an artwork photo or a name tag
-   must not be handed the browser's own menu ("Open image in new tab",
-   "Save image as…", "Copy", "Search Google for…"). Turning selection off
-   removes the long-press selection and its callout on Android;
-   -webkit-touch-callout removes the iOS image/link sheet; the script also
-   cancels the remaining contextmenu event and image drags. Text fields get
-   their native behaviour back in the last rule, so typing, pasting and
-   password managers keep working. */
 body {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
@@ -51,11 +42,6 @@ html, body {
   background: linear-gradient(180deg, var(--wall) 0%, var(--wall-deep) 100%);
 }
 
-/* Pull-to-refresh is the browser's gesture, not an app feature: a downward drag on
-   a screen that is already at the top reloads the page and drops the visitor out
-   of AR or out of a half-finished quiz. `none` keeps the page from taking part and
-   `contain` stops a drag inside a list from chaining up to it. Safari ignores both,
-   so offline-store.js cancels that one gesture there. */
 .gallery-scroll, .detail-scroll, .quiz-body, .library-detail-scroll,
 .chat-messages, .leaderboard-half, .leaderboard-list, .unlock-card .modal-desc {
   overscroll-behavior: contain;
@@ -63,11 +49,9 @@ html, body {
 
 h1, h2 { font-family: Georgia, "Times New Roman", serif; font-weight: 500; letter-spacing: 0.01em; }
 
-/* ---------------- AR base layer ---------------- */
 #ar-container { position: fixed; inset: 0; z-index: 0; touch-action: none; }
 #ar-container a-scene { width: 100%; height: 100%; }
 
-/* ---------------- shared background layer ---------------- */
 .home-bg-layer {
   position: fixed; inset: 0; z-index: 1;
   width: 100%; height: 100%;
@@ -92,7 +76,6 @@ h1, h2 { font-family: Georgia, "Times New Roman", serif; font-weight: 500; lette
 }
 .home-bg-overlay.visible { display: block; }
 
-/* ---------------- generic screen overlay ---------------- */
 .screen {
   position: fixed; inset: 0; z-index: 5;
   display: flex; flex-direction: column;
@@ -100,7 +83,6 @@ h1, h2 { font-family: Georgia, "Times New Roman", serif; font-weight: 500; lette
 }
 .screen.hidden { display: none; }
 
-/* ---------------- screen transitions ---------------- */
 .screen.enter-left, .screen.enter-right, .screen.enter-top {
   animation: screenEnter 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -113,7 +95,6 @@ h1, h2 { font-family: Georgia, "Times New Roman", serif; font-weight: 500; lette
   to   { opacity: 1; transform: translate(0, 0); }
 }
 
-/* staggered list content */
 .stagger-in {
   animation: staggerItemIn 0.32s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   animation-delay: calc(var(--i, 0) * 35ms);
@@ -126,7 +107,6 @@ h1, h2 { font-family: Georgia, "Times New Roman", serif; font-weight: 500; lette
 @media (prefers-reduced-motion: reduce) {
   .screen.enter-left, .screen.enter-right, .screen.enter-top { animation: none; }
   .stagger-in, .art-card { animation: none; }
-  /* Keep the quiz result readable without the ring sweeping or rows popping. */
   .quiz-ring-progress { transition: none; }
   .quiz-result-dot, .quiz-badge-chip, .quiz-score.bump, .quiz-feedback { animation: none; }
   .quiz-progress-fill { transition: none; }
@@ -136,7 +116,6 @@ h1, h2 { font-family: Georgia, "Times New Roman", serif; font-weight: 500; lette
   padding-bottom: var(--nav-height);
 }
 
-/* ---------------- home screen ---------------- */
 #screen-home {
   height: 100%;
   padding-top: max(28px, env(safe-area-inset-top));
@@ -238,7 +217,6 @@ button.corner-fabs-right {
 }
 .run-timer.hidden { display: none; }
 
-/* ---------------- locked/unlocked filter buttons ---------------- */
 .filter-row { display: flex; gap: 10px; margin-bottom: 16px; }
 .filter-btn {
   flex: 1;
@@ -287,8 +265,6 @@ button.corner-fabs-right {
 }
 .art-card.unlocked { border-color: var(--frame-gold); cursor: pointer; }
 .art-card.unlocked:active { transform: scale(0.97); }
-/* A locked piece is recognisable but not readable: the photo is softened, so the
-   hunt still has something to reveal. Tapping it opens the enlarged preview. */
 .art-card.locked { cursor: pointer; }
 .art-card.locked:active { transform: scale(0.97); }
 .art-card.locked .art-card-img {
@@ -316,7 +292,6 @@ button.corner-fabs-right {
 }
 .status-badge.unlocked {
   background: var(--success); color: #0e1a12; border-color: transparent;
-  /* Compact circular check mark instead of a wide "✓ Unlocked" pill */
   width: 22px; height: 22px; padding: 0; border-radius: 50%;
   justify-content: center; font-size: 12px; line-height: 1;
   box-shadow: 0 1px 5px rgba(0,0,0,0.4);
@@ -341,7 +316,6 @@ button.corner-fabs-right {
 .art-card-caption h3 { font-size: 13.5px; margin: 0 0 3px 0; font-family: Georgia, serif; font-weight: 600; color: #f4f1ea; }
 .art-card-caption p { font-size: 11px; color: rgba(244,241,234,0.75); margin: 0; line-height: 1.35; }
 
-/* ---------------- buttons + inputs ---------------- */
 .btn-primary, .btn-secondary, .btn-icon {
   border: none; border-radius: 999px; font-size: 14px; font-weight: 600;
   padding: 14px 22px; cursor: pointer; font-family: inherit; min-height: 48px;
@@ -351,10 +325,6 @@ button.corner-fabs-right {
 .btn-primary:disabled { opacity: 0.5; }
 .btn-secondary { background: rgba(244, 241, 234, 0.1); color: var(--text); flex: 1; }
 .btn-icon { background: rgba(0,0,0,0.5); color: var(--text); padding: 9px 16px; font-size: 13px; font-weight: 500; min-height: 42px; }
-/* Components that fade (modal-overlay, chat-panel, filter-toast, badge-toast,
-   loading-screen, tour-overlay) define their own two-class .hidden rule so they
-   keep their transitions. Plain buttons have no display rule of their own, so
-   without this they never actually disappear when .hidden is added. */
 .btn-primary.hidden, .btn-secondary.hidden, .btn-small.hidden { display: none; }
 
 .text-input {
@@ -366,7 +336,6 @@ button.corner-fabs-right {
 }
 .text-input::placeholder { color: rgba(244,241,234,0.4); }
 
-/* ---------------- scanner screen ---------------- */
 #screen-scanner {
   background: transparent; align-items: center; justify-content: space-between;
   padding: max(20px, env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom));
@@ -388,7 +357,6 @@ button.corner-fabs-right {
 }
 .scan-hint.found { background: rgba(111,170,130,0.85); border-color: transparent; color: #0e0d0c; font-weight: 600; }
 
-/* ---------------- detail / badges screen ---------------- */
 .detail-topbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: max(16px, env(safe-area-inset-top)) 16px 10px;
@@ -405,7 +373,6 @@ button.corner-fabs-right {
 .quiz-done-note { text-align: center; color: var(--success); font-weight: 700; font-size: 13px; margin-top: 12px; }
 .quiz-done-note.hidden { display: none; }
 
-/* ---------------- quiz screen ---------------- */
 .quiz-topbar {
   display: flex; align-items: center; gap: 12px;
   padding: max(16px, env(safe-area-inset-top)) 16px 12px;
@@ -590,7 +557,6 @@ button.corner-fabs-right {
 }
 .quiz-detail-meta.hidden { display: none; }
 
-/* ---------------- library screen (low-end-device friendly) ---------------- */
 .library-list { display: flex; flex-direction: column; gap: 14px; margin-top: 10px; }
 .library-card {
   display: flex; gap: 12px; align-items: flex-start;
@@ -600,8 +566,6 @@ button.corner-fabs-right {
 }
 .library-card-photo { width: 88px; height: 88px; flex-shrink: 0; position: relative; overflow: hidden; }
 .library-card-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
-/* Locked library rows keep the photo as a hint and hold the write-up back until
-   the piece has been scanned in the museum. */
 .library-card.locked .library-card-photo img {
   filter: blur(2px) saturate(0.86) brightness(0.9);
   transform: scale(1.1);
@@ -634,7 +598,6 @@ button.corner-fabs-right {
   color: var(--frame-gold); text-transform: uppercase; letter-spacing: 0.04em;
 }
 
-/* ---------------- library detail popup ---------------- */
 .library-detail-card {
   max-width: 360px; max-height: 82vh;
   padding: 0; overflow: hidden; text-align: left;
@@ -669,9 +632,6 @@ button.corner-fabs-right {
 }
 .library-detail-footer .btn-primary { margin-top: 0; }
 
-/* ---------------- locked artwork preview popup ---------------- */
-/* Shown instead of the library popup while a piece is still sealed: the same
-   softened photo, enlarged, plus the title — never the write-up. */
 .modal-card.locked-preview-card {
   max-width: 340px; padding: 0; overflow: hidden;
   max-height: calc(100vh - 48px); text-align: left;
@@ -679,8 +639,6 @@ button.corner-fabs-right {
 }
 .locked-preview-photo {
   position: relative; width: 100%; aspect-ratio: 4 / 3;
-  /* On a short viewport (landscape phone) the photo gives up height before the
-     title and the button get pushed off screen. */
   flex: 0 1 auto; min-height: 92px; max-height: 46vh;
   overflow: hidden; background: rgba(0,0,0,0.45);
 }
@@ -711,17 +669,12 @@ button.corner-fabs-right {
 .locked-preview-body .modal-desc { margin: 0; }
 .locked-preview-footer { padding: 4px 20px calc(16px + env(safe-area-inset-bottom)); flex-shrink: 0; }
 .locked-preview-footer .btn-primary { margin-top: 0; }
-/* Landscape phones are shorter than the panel needs, so the soft photo and the
-   paragraph step aside and the title + button stay on one screen. */
 @media (max-height: 470px) {
   .locked-preview-photo { max-height: 38vh; min-height: 72px; }
   .locked-preview-body { padding: 12px 20px 8px; }
   .locked-preview-body .modal-desc { display: none; }
 }
 
-/* ---------------- Learn More ---------------- */
-/* A quiet gold outline rather than a second filled button: on the detail screen it
-   sits under Take the Quiz, which should stay the brightest thing on the page. */
 .btn-learn {
   display: flex; align-items: center; justify-content: center; gap: 8px;
   width: 100%; padding: 12px 18px; min-height: 46px; margin: 0 0 22px 0;
@@ -735,11 +688,8 @@ button.corner-fabs-right {
 .btn-learn:active { transform: scale(0.98); }
 .btn-learn:disabled { opacity: 0.55; }
 .btn-learn-ico { font-size: 12px; line-height: 1; }
-/* Inside the library popup the description already ends the scroll area, so the
-   button does not need the detail screen's trailing gap. */
 .library-detail-body .btn-learn { margin: 2px 0 18px 0; }
 
-/* Sits above the library popup (20) because it can be opened from inside it. */
 #learn-modal { z-index: 30; }
 .learn-card {
   max-width: 400px; width: 100%; max-height: 86vh;
@@ -767,8 +717,6 @@ button.corner-fabs-right {
 }
 @keyframes learn-spin { to { transform: rotate(360deg); } }
 
-/* The spinner only means "still working"; on an error the sentence is the whole
-   message, so the ring would just look like it is still loading. */
 .learn-status.is-error .learn-spinner { display: none; }
 
 .learn-body.hidden { display: none; }
@@ -812,8 +760,6 @@ button.corner-fabs-right {
 .learn-source a:active { background: rgba(255, 255, 255, 0.08); }
 .learn-source-host { display: block; margin-top: 2px; font-size: 10.5px; color: var(--text-dim); }
 
-/* The disclaimer is not dismissible: it stays put through loading, error and a
-   good answer, because the answer is what needs the caveat. */
 .learn-disclaimer {
   flex-shrink: 0; margin: 12px 0 0 0; padding-top: 12px;
   border-top: 1px solid rgba(244, 241, 234, 0.1);
@@ -826,7 +772,6 @@ button.corner-fabs-right {
   .learn-spinner { animation: none; }
 }
 
-/* ---------------- Kuya Davon chat head ---------------- */
 .chat-head-btn {
   position: fixed; right: 18px; bottom: calc(var(--nav-height) + 18px);
   z-index: 12; width: 54px; height: 54px; border-radius: 50%;
@@ -875,7 +820,6 @@ button.corner-fabs-right {
   background: var(--frame-gold); color: #201a10; font-size: 16px; cursor: pointer; flex-shrink: 0;
 }
 
-/* ---------------- settings screen ---------------- */
 .settings-row {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 16px 4px; border-bottom: 1px solid rgba(244,241,234,0.1); cursor: pointer;
@@ -901,7 +845,6 @@ button.corner-fabs-right {
 }
 .admin-error.hidden { display: none; }
 
-/* ---------------- admin panel ---------------- */
 .active-now-banner {
   display: flex; align-items: baseline; gap: 8px; margin-top: 10px;
   padding: 16px 18px; border-radius: 14px;
@@ -987,7 +930,6 @@ button.corner-fabs-right {
 .badge-card h4 { margin: 0 0 4px 0; font-size: 13px; font-family: Georgia, serif; }
 .badge-card p { margin: 0; font-size: 10.5px; color: var(--text-dim); line-height: 1.35; }
 
-/* ---------------- leaderboard screen ---------------- */
 .leaderboard-title { font-size: 18px; margin: 0; }
 .leaderboard-split {
   flex: 1; display: flex; flex-direction: column; overflow: hidden;
@@ -1040,7 +982,6 @@ button.corner-fabs-right {
 }
 .crown { font-size: 12px; }
 
-/* ---- guestbook board: pannable/zoomable corkboard of sticky notes ---- */
 .notes-half-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .notes-board-controls { display: flex; gap: 6px; }
 .board-zoom-btn {
@@ -1087,7 +1028,6 @@ button.corner-fabs-right {
   font-size: 8px; font-weight: 700; color: rgba(0,0,0,0.55);
   margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-/* Posted date, day only — no time, the note is too small for a clock. */
 .note-sticky-date {
   flex-shrink: 0; font-size: 7px; font-weight: 600; letter-spacing: 0.02em;
   color: rgba(0,0,0,0.42); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -1126,7 +1066,6 @@ button.corner-fabs-right {
 }
 .notes-locked-msg.hidden { display: none; }
 
-/* ---- note editor modal ---- */
 .note-editor-card { max-width: 340px; }
 .note-type-tabs { display: flex; gap: 8px; margin: 14px 0 12px; }
 .note-tab {
@@ -1172,7 +1111,6 @@ button.corner-fabs-right {
 .note-photo-frame img.hidden, .note-photo-frame video.hidden { display: none; }
 .note-photo-controls { display: flex; gap: 8px; }
 
-/* ---------------- bottom navigation ---------------- */
 .bottom-nav {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 15;
   display: flex;
@@ -1268,7 +1206,6 @@ button.corner-fabs-right {
   margin-right: 4px;
 }
 
-/* ---------------- unlock modal / username / badge toast ---------------- */
 .modal-overlay {
   position: fixed; inset: 0; z-index: 20;
   background: rgba(6, 5, 5, 0.75);
@@ -1283,7 +1220,6 @@ button.corner-fabs-right {
   max-width: 320px; width: 100%;
 }
 
-/* ---------------- unlock / scan celebration card ---------------- */
 .unlock-card {
   background: rgba(45, 36, 32, 0.88);
   backdrop-filter: blur(14px);
@@ -1306,7 +1242,6 @@ button.corner-fabs-right {
 .unlock-card .modal-desc::-webkit-scrollbar-thumb { background: rgba(201, 168, 118, 0.45); border-radius: 999px; }
 .modal-badge.scanned { background: var(--frame-gold); }
 
-/* ---------------- celebratory badge unlock modal ---------------- */
 .badge-unlock-card {
   position: relative;
   background: rgba(26, 22, 19, 0.94);
@@ -1396,7 +1331,6 @@ button.corner-fabs-right {
   margin: 0 0 16px 0;
 }
 
-/* ---------------- celebratory confetti shower ---------------- */
 .unlock-confetti {
   position: fixed; inset: 0; z-index: 60; overflow: hidden;
   pointer-events: none;
@@ -1454,19 +1388,12 @@ button.corner-fabs-right {
 .modal-desc { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin: 0 0 6px 0; }
 .modal-actions { display: flex; gap: 10px; margin-top: 14px; }
 
-/* ---- username modal ---- */
-/* Both the name field and the duplicate-name confirmation live in one card,
-   so confirming a suggestion never stacks a second overlay on the first.
-   Plain <div>s have no display rule of their own, so each step that can be
-   hidden needs its own two-class rule. */
 .username-step.hidden { display: none; }
 .username-status {
   font-size: 12px; color: var(--text-dim); line-height: 1.4;
   margin: -6px 0 10px 0;
 }
 .username-status.hidden { display: none; }
-/* The suggested name is the point of the confirmation, so it is set as a
-   gold plate rather than blended into the paragraph around it. */
 .username-confirm-name {
   font-family: Georgia, "Times New Roman", serif;
   font-size: 22px; line-height: 1.25; color: var(--frame-gold);
@@ -1488,7 +1415,6 @@ button.corner-fabs-right {
 }
 .badge-toast.hidden { opacity: 0; transform: translate(-50%, -10px); pointer-events: none; }
 
-/* ---------------- loading / permission ---------------- */
 .loading-screen {
   position: fixed; inset: 0; z-index: 30; background: var(--wall-deep);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -1525,9 +1451,6 @@ button.corner-fabs-right {
 }
 .permission-error.hidden { display: none; }
 
-/* ============================================
-   ONBOARDING TOUR
-   ============================================ */
 .tour-overlay {
   position: fixed;
   inset: 0;
@@ -1687,7 +1610,6 @@ button.corner-fabs-right {
   flex: 1;
 }
 
-/* Center vertically on short screens instead of bottom */
 @media (max-height: 640px) {
   .tour-card {
     bottom: auto;
@@ -1695,7 +1617,6 @@ button.corner-fabs-right {
     transform: translateY(-50%);
   }
 }
-/* ---------------- immersive / skybox screen ---------------- */
 #screen-immersive {
   background: #000;
   padding: 0;
@@ -1721,8 +1642,6 @@ button.corner-fabs-right {
   width: 100%;
   height: 100%;
 }
-/* Hologram sign switch: brown/gold to match the gallery theme, and only
-   rendered when the artwork actually has signs. */
 #btn-immersive-signs {
   margin-left: auto;
   border: 1px solid var(--frame-gold-dim);
@@ -1738,9 +1657,6 @@ button.corner-fabs-right {
   box-shadow: none;
 }
 #btn-immersive-signs.hidden { display: none; }
-/* One-line nudge under the scene, shown for a few seconds the first time the
-   signs appear: they look like something to read, not something to handle, so
-   the drag and the pinch have to be announced once. Never in the way. */
 .immersive-hint {
   position: absolute;
   left: 50%;
@@ -1764,8 +1680,6 @@ button.corner-fabs-right {
   opacity: 1;
   transform: translate(-50%, 0);
 }
-/* The glass belongs to the panels: a drag there is never a page gesture, and a
-   pinched sign is never a browser zoom. */
 #immersive-container,
 #immersive-container canvas {
   touch-action: none;
@@ -1773,16 +1687,9 @@ button.corner-fabs-right {
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
-/* A-Frame still tags the canvas with its grab cursor, which would promise a
-   camera drag that no longer exists; the sign hover sets its own cursor. */
 #immersive-container canvas {
   cursor: default;
 }
-/* ---------------- focused hologram sign reader ----------------
-   Tapping a panel lifts the same placard onto the glass: the room dims, the
-   sign scales up from just under full size, and both fade back out on Back.
-   `visibility` rides along so a closed layer can never swallow a tap meant for
-   the 3D scene behind it. */
 .holo-reader {
   position: absolute;
   inset: 0;
@@ -1814,7 +1721,6 @@ button.corner-fabs-right {
   opacity: 1;
   transform: translateY(0) scale(1);
 }
-/* Used when Immersive Mode itself closes, so the next visit opens clean. */
 .holo-reader.no-transition,
 .holo-reader.no-transition .holo-reader-stage { transition: none; }
 .holo-reader-canvas {
@@ -1857,10 +1763,6 @@ button.corner-fabs-right {
   50% { opacity: 0.55; }
 }
 
-/* ---------------- reCAPTCHA v3 entry gate ---------------- */
-/* Painted on first open and removed once Google has scored the browser
-   (recaptcha.js). Sits above the loading screen (z-index 30) and the
-   username modal (z-index 20). */
 .recaptcha-gate {
   position: fixed; inset: 0; z-index: 60;
   display: flex; align-items: center; justify-content: center;
@@ -1871,8 +1773,6 @@ button.corner-fabs-right {
   transition: opacity 0.35s ease;
 }
 .recaptcha-gate.hidden { opacity: 0; pointer-events: none; }
-/* Set before first paint when the tab already passed, so reloading does not
-   flash the overlay. */
 html.recaptcha-passed .recaptcha-gate { display: none; }
 
 .recaptcha-gate-card {
@@ -1913,9 +1813,6 @@ html.recaptcha-passed .recaptcha-gate { display: none; }
   color: rgba(244, 241, 234, 0.42);
 }
 .recaptcha-gate-legal a { color: var(--frame-gold); text-decoration: none; }
-/* recaptcha.js loads api.js with the default badge and hides it here (Google
-   400s on the undocumented badge=hidden value). The attribution below keeps
-   the notice visible without the badge. */
 .grecaptcha-badge { visibility: hidden !important; opacity: 0 !important; }
 .recaptcha-attribution {
   margin: 18px 0 0;

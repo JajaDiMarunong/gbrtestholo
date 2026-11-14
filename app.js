@@ -1,22 +1,7 @@
-// ══════════════════════════════════════════════════════════════════════
-//  GBR MUSEUM — app.js
-//
-//  Ito yung buong app na hawak ng bisita: gallery, scanner, quiz,
-//  badges, library, chat, hologram, settings. Lahat nandito.
-//
-//  Bago ka mag-edit: hanapin mo muna yung section na gumagawa ng bagay na
-//  babaguhin mo, tapos i-test. Please lang.
-// ══════════════════════════════════════════════════════════════════════
-
-// Saan nakalagay yung artworks at settings sa Firebase.
-// Pag pinalitan mo to ng ibang database, mawawalan ng laman yung gallery.
 const FIREBASE_URL = "https://gbrmuseumtest-default-rtdb.asia-southeast1.firebasedatabase.app";
 const BACKGROUND_IMAGE = "./assets/background.jpg";
 const AR_BUNDLE_CACHE_KEY = "museum_ar_bundle_v1";
 
-// Version na lumalabas sa Settings. Galing sa asset-manifest.js.
-// Pag may binago ka sa app.js, taasan mo rin yung ?v= sa index.html at yung
-// APP_VERSION doon, kung hindi yung luma pa rin ang bubuksan ng phone.
 const RELEASE_VERSION = (typeof self !== "undefined" && self.APP_VERSION) || "1.0.0";
 
 function readAssetBuild(scriptName) {
@@ -63,13 +48,8 @@ document.addEventListener(
   { capture: true }
 );
 
-// Dito nakatira lahat ng artwork pagkatapos i-fetch galing Firebase.
-// Bawat item may unlocked / quizCompleted / quizBest — yun yung alam ng app
-// tungkol sa bisita sa session na to.
 let artworks = [];
 
-// Mga badge. Kung magdadagdag ka dito, ilagay mo rin sa renderBadges at sa
-// mga check*Badge() sa baba, kung hindi hindi siya lalabas kahit makuha.
 const badges = {
   firstScan: {
     id: "firstScan",
@@ -422,24 +402,12 @@ window.addEventListener("appinstalled", () => {
 updateInstallUI();
 window.addEventListener('beforeinstallprompt', () => updateInstallUI());
 
-// ══════════════════════════════════════════════════════════════════════
-//  SAVED PROGRESS  (yung "pag balik ko, wala na yung progress ko" na bug)
-// ══════════════════════════════════════════════════════════════════════
-// Yung record sa localStorage ANG official na record ng bisita, hindi yung
-// artworks array. Bakit? Kasi pwedeng maging EMPTY yung artworks — walang
-// internet, walang cache, o na-unpublish pansamantala yung art. Pag doon ka
-// kumuha ng data, mabubura yung visit na pinaghirapan niya.
-//
-// TANGINA WAG TATANGGALIN yung merge sa persistProgress(). Pag inalis mo
-// yun, bumabalik yung bug. Naka-lock yun ng test, wag ka na magmatigas.
 let currentUsername = null;
 let sessionStartTime = null;
 let finalElapsedSeconds = null;
 let leaderboardSubmitted = false;
 const PROGRESS_STORAGE_KEY = "museum_progress_v1";
 
-// Basahin yung record sa device. Kung basag o wala, null lang — wag
-// mag-throw, maraming phone ang nagba-block ng storage.
 function readStoredProgress() {
   try {
     const parsed = JSON.parse(localStorage.getItem(PROGRESS_STORAGE_KEY) || "null");
@@ -449,8 +417,6 @@ function readStoredProgress() {
   }
 }
 
-// Ito yung nagsasave. Panuntunan: MERGE lang, walang binubura.
-// Simulan sa kung ano na ang nasa device, tapos idagdag yung alam ng session.
 function persistProgress() {
   const stored = readStoredProgress();
   const unlocked = new Set(stored && Array.isArray(stored.unlocked) ? stored.unlocked : []);
@@ -459,8 +425,6 @@ function persistProgress() {
     if (art.unlocked) unlocked.add(art.id);
     if (art.quizCompleted) quizCompleted.add(art.id);
   });
-  // Best score bawat art. Bago ang mananalo; yung luma hindi binubura, para
-  // may pang-compare pag nag-retake siya.
   const quizBest = { ...(stored && stored.quizBest ? stored.quizBest : {}) };
   artworks.forEach((art) => {
     if (art.quizBest && Number.isFinite(art.quizBest.correct)) {
@@ -483,9 +447,6 @@ function persistProgress() {
     leaderboardSubmitted: leaderboardSubmitted || Boolean(stored && stored.leaderboardSubmitted)
   };
 
-  // Kung i-refuse ng phone yung write (private mode, punong storage, blocked)
-  // huwag ipa-crash yung app. Nawala na lang yung pinakabagong galaw, hindi
-  // buong visit.
   try {
     localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progress));
     return true;
@@ -495,8 +456,6 @@ function persistProgress() {
   }
 }
 
-// Ibalik sa artworks yung naka-save na visit. Yung mga art na wala sa catalog
-// ngayon, nasa record pa rin — babalik sila pag bumalik yung catalog.
 function restoreProgress() {
   const progress = readStoredProgress();
   if (!progress) return false;
@@ -522,17 +481,11 @@ function restoreProgress() {
   return true;
 }
 
-// Sinasave tuwing naka-background na yung page. Ito yung sagot sa iPhone:
-// pinapatay ng iOS yung naka-suspend na app at hindi tumatakbo yung unload.
-// Mura lang to kasi merge lang naman, walang mabigat.
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") persistProgress();
 });
 window.addEventListener("pagehide", () => persistProgress());
 
-// Pakiusapan yung browser na wag burahin yung storage namin pag nagkaka-space
-// issue. Skip sa Firefox — may prompt kasi doon at ayaw natin ng modal sa
-// gitna ng museum.
 if (navigator.storage && typeof navigator.storage.persist === "function" && !/firefox/i.test(navigator.userAgent)) {
   navigator.storage.persist().catch(() => {});
 }
@@ -540,8 +493,6 @@ if (navigator.storage && typeof navigator.storage.persist === "function" && !/fi
 let catalogLoadPromise = null;
 let catalogReloadChain = Promise.resolve();
 
-// Isang load lang dapat ang tumatakbo. Pag dalawa, nauuna yung matapos —
-// at pwedeng yung walang laman pa yung mahuli, tapos mapapatungan yung bago.
 function loadArtworkCatalog() {
   if (!catalogLoadPromise) {
     catalogLoadPromise = initArtworks().then(
@@ -552,10 +503,6 @@ function loadArtworkCatalog() {
   return catalogLoadPromise;
 }
 
-// Bumalik ang net? Load ulit yung catalog, i-restore yung visit, tapos
-// i-repaint yung gallery — para hindi na kailangan i-close at buksan pa yung
-// app. Nakapila yung attempts, kasi pag nauna natapos yung isa bago dumating
-// yung pangalawa, dapat hindi mawala yung retry.
 window.addEventListener("online", () => {
   catalogReloadChain = catalogReloadChain.then(async () => {
     if (artworks.length) return;
@@ -841,12 +788,7 @@ function hideFilterToast() {
   filterToast.classList.add("hidden");
 }
 
-// ══════════════════════════════════════════════════════════════════════
-//  GALLERY / HOME
-// ══════════════════════════════════════════════════════════════════════
 
-// Buuin ulit lahat ng cards. Dito rin galing yung filter at yung progress bar,
-// kaya tawagin mo to pag may nabago sa artworks (unlock, filter, catalog reload).
 function renderGallery() {
   galleryGrid.innerHTML = "";
 
@@ -903,8 +845,6 @@ function isArtworkLocked(art) {
   return true;
 }
 
-// Locked pa siya, so preview lang: picture at pangalan, walang details.
-// Para kahit papaano may dahilan siyang i-scan yung art sa pader.
 function openLockedPreview(art) {
   if (!art) return;
   lockedPreviewTitle.textContent = art.name;
@@ -935,9 +875,6 @@ lockedPreviewModal.addEventListener("click", (e) => {
   if (e.target === lockedPreviewModal) hideLockedPreview();
 });
 
-// ══════════════════════════════════════════════════════════════════════
-//  SCREEN NAVIGATION — isang screen lang ang nakikita at a time
-// ══════════════════════════════════════════════════════════════════════
 const NAV_TAB_ORDER = ["home", "scanner", "leaderboard"];
 let lastActiveNavTab = "home";
 
@@ -947,9 +884,6 @@ function animateScreenIn(screenEl, animationClass) {
   screenEl.classList.add(animationClass);
 }
 
-// Tinatago lahat, tapos 'yung tatawagin lang ang ipapakita. Isinasara rin
-// yung camera pag umaalis ka sa scanner — kung hindi, bukas pa rin yung cam
-// habang nasa quiz ka. Nakakahiya yun.
 function hideAllScreens() {
   const wasScannerVisible = !screenScanner.classList.contains("hidden");
   if (wasScannerVisible) {
@@ -1147,12 +1081,7 @@ btnOpenSettings.addEventListener("click", showSettings);
 btnSettingsBack.addEventListener("click", showHome);
 btnImmersiveBack.addEventListener("click", exitImmersive);
 
-// ══════════════════════════════════════════════════════════════════════
-//  UNLOCK MOMENT — modal + confetti
-// ══════════════════════════════════════════════════════════════════════
 
-// Unang scan = "Artwork Unlocked". Pag na-scan na dati, "Artwork Scanned"
-// na lang, para hindi maging OA yung celebration sa pangalawang beses.
 function showUnlockModal(art, wasAlreadyUnlocked) {
   modalTitle.textContent = art.name;
   modalDesc.textContent = art.details;
@@ -1167,8 +1096,6 @@ function showUnlockModal(art, wasAlreadyUnlocked) {
 }
 
 let confettiCleanupTimer = null;
-// Confetti sa canvas. Wag mong alisin yung cleanup timer sa dulo — pag
-// hindi natanggal, nagpapatong-patong yung animation at bumabagal yung phone.
 function triggerConfettiCelebration(options = {}) {
   const count = options.count || 105;
   const isDual = options.dual ?? true;
@@ -1337,9 +1264,6 @@ function showBadgeToast(badge) {
   badgeToastTimer = setTimeout(() => badgeToast.classList.add("hidden"), 2600);
 }
 
-// ══════════════════════════════════════════════════════════════════════
-//  BADGES — awardBadge() lang ang nagbibigay, tapos isinasave
-// ══════════════════════════════════════════════════════════════════════
 function awardBadge(key, options = {}) {
   const badge = badges[key];
   if (!badge || badge.earned) return;
@@ -1528,13 +1452,6 @@ function buildArtworkPromptList() {
     .join("\n");
 }
 
-// ══════════════════════════════════════════════════════════════════════
-//  KUYA DAVON — AI museum guide (chat)
-// ══════════════════════════════════════════════════════════════════════
-// Yung prompt ni Kuya Davon. Wag mong galawin yung parteng "never name any
-// model" — paulit-ulit nang tinanong yan ng mga bisita at yun ang tamang
-// sagot. Pag may binago ka sa usapan, i-test mo talaga yung chat, hindi lang
-// i-check kung walang error.
 function buildKuyaDavonSystemPrompt() {
   const artworkList = buildArtworkPromptList();
 
@@ -2082,9 +1999,6 @@ const QUIZ_ORDER_SALT = 0x9e3779b1;
 
 let quizArtId = null;
 let quizIndex = 0;
-// ══════════════════════════════════════════════════════════════════════
-//  QUIZ
-// ══════════════════════════════════════════════════════════════════════
 let quizAnswers = [];
 let quizOptionOrders = [];
 let quizAttempt = 0;
@@ -2132,9 +2046,6 @@ function shuffleQuizOptions(count, random) {
   return order;
 }
 
-// TANGINA WAG TATANGGALIN yung shuffle dito. Seeded yung order: pareho habang
-// isang attempt ka pa lang, pero iba sa susunod na take mo. Yung guard sa
-// baba ang humaharang sa "nag-shuffle nga ba?" na parehong-pareho pa rin.
 function buildQuizOptionOrders(art) {
   const seed = hashString(`quiz-order|${art.id}|${getQuizSeed()}|${quizAttempt}`) ^ QUIZ_ORDER_SALT;
   const random = mulberry32(seed);
@@ -2322,9 +2233,6 @@ btnQuizNext.addEventListener("click", () => {
   finishQuiz(art);
 });
 
-// Dito nagsasave: quizCompleted + quizBest, tapos persistProgress() agad.
-// Kung may bagong badge, delay muna bago ipakita yung modal para hindi
-// sabay sa result screen — nakakalito pag dalawa ang pop-up.
 function finishQuiz(art) {
   const total = art.quiz.length;
   const correct = Math.min(countQuizCorrect(), total);
@@ -2519,9 +2427,6 @@ async function loadLeaderboard() {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════
-//  LEADERBOARD — time mo sa museum, isinusubmit kasama ng pangalan
-// ══════════════════════════════════════════════════════════════════════
 async function submitLeaderboardEntry(name, timeSeconds) {
   try {
     const user = firebase.auth().currentUser;
@@ -2744,12 +2649,6 @@ function getMyNote() {
   return allNotesCache.find(isMyNote) || null;
 }
 
-// ══════════════════════════════════════════════════════════════════════
-//  GUESTBOOK BOARD — yung corkboard na may sticky notes
-// ══════════════════════════════════════════════════════════════════════
-// Yung layout ng notes deterministic: parehong seed, parehong pwesto. Wag mo
-// gawing random nang walang seed, nag-jujump kasi yung notes every refresh at
-// mukhang sira yung board.
 function renderNotesBoard() {
   notesBoard.innerHTML = "";
   const notesForDisplay = [...allNotesCache].sort(
@@ -3654,12 +3553,6 @@ async function resolveMindTargetBlobUrl(src) {
   return src;
 }
 
-// ══════════════════════════════════════════════════════════════════════
-//  AR SCANNER — mind-ar, yung targets galing sa admin
-// ══════════════════════════════════════════════════════════════════════
-// Yung AR bundle (mga target image) pinupublish ng admin sa Supabase, tapos
-// naka-cache dito sa phone. Pag walang published bundle, sasabihin natin sa
-// bisita na kausapin yung staff — hindi natin papaikutin yung camera nang wala.
 async function initAR() {
   console.log("[initAR] Starting AR initialization");
   let scannable = [];
@@ -3851,9 +3744,6 @@ async function loadPublishedArBundle() {
   return manifest;
 }
 
-// Yung catalog galing Firebase. Dalawang fetch: artworks, tapos yung
-// artworkSettings (overrides ng admin). Pag pumalya yung isa, tuloy pa rin —
-// sayang naman kung walang laman yung gallery dahil lang sa settings.
 async function initArtworks() {
   let merged = [];
 
@@ -4018,9 +3908,6 @@ const TOUR_STEPS = [
 let currentTourStep = 0;
 let highlightedEl = null;
 
-// ══════════════════════════════════════════════════════════════════════
-//  TUTORIAL / TOUR — yung unang beses na pagbukas ng app
-// ══════════════════════════════════════════════════════════════════════
 function initTour() {
   if (localStorage.getItem("museum_tour_seen")) {
     showHome();
@@ -4428,12 +4315,6 @@ function resolveHologramSignLayout(mode, hasText, hasImage) {
   return layout;
 }
 
-// ══════════════════════════════════════════════════════════════════════
-//  HOLOGRAM SIGNS — 3D text/image na nakapatong sa art
-// ══════════════════════════════════════════════════════════════════════
-// Yung sign mismo ay canvas na dinodrowing tapos ginagawang texture. Mahal sa
-// CPU to, kaya iniingatan natin: isang canvas bawat sign, at hindi nagre-redraw
-// kung walang nagbago.
 function drawHologramSignCanvas({ title, text, image, mode, index, total, canvas: target }) {
   const canvas = target || document.createElement("canvas");
   if (canvas.width !== HOLOGRAM_TEX_WIDTH) canvas.width = HOLOGRAM_TEX_WIDTH;
@@ -4672,9 +4553,6 @@ function refreshHologramCanvasTexture(el, canvas) {
   if (el && canvas) el.setAttribute("material", "src", canvas);
 }
 
-// Yung A-Frame component na nagmamarka kung aling sign ang tinatapik mo.
-// Dito naka-hook yung hover at tap, kaya pag inalis mo to, wala nang
-// nagre-react yung mga hologram sa daliri ng bisita.
 function registerHologramSignComponent() {
   if (!window.AFRAME || window.AFRAME.components["hologram-sign"]) return;
 
@@ -5377,12 +5255,6 @@ async function runEntryGate() {
   return recaptcha.runGate({ action: recaptcha.ACTIONS.ENTRY_GATE });
 }
 
-// ══════════════════════════════════════════════════════════════════════
-//  BOOT — ito yung unang tumatakbo pag binuksan yung app
-// ══════════════════════════════════════════════════════════════════════
-// TANGINA WAG TATANGGALIN yung restoreProgress() pagkatapos ng
-// loadArtworkCatalog(). Kailangan may artwork muna bago may ma-restore-han.
-// Pag binago mo yung order, sasabog yung saved progress.
 async function bootMuseum() {
   try {
     await runEntryGate();

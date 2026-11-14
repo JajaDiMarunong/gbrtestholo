@@ -1,17 +1,9 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
 
-// Server-side half of the reCAPTCHA v3 gate used by recaptcha.js.
-// The browser only ever holds the public site key; the shared secret lives in
-// the Supabase function secrets as RECAPTCHA_SECRET_KEY (see SECURITY.md) and
-// is never returned to the page.
 const SITEVERIFY_URL = "https://www.google.com/recaptcha/api/siteverify";
 
-// Only actions this site actually uses may be verified. A token minted for one
-// action cannot be replayed for another.
 const ALLOWED_ACTIONS = new Set(["entry_gate", "admin_login"]);
 
-// v3 scores run from 0.0 (automated) to 1.0 (human). 0.4 keeps normal mobile
-// and privacy-browser traffic usable while still cutting obvious bots.
 const DEFAULT_MIN_SCORE = 0.4;
 const TOKEN_MAX_LENGTH = 10000;
 
@@ -125,8 +117,6 @@ export default {
     const codes = Array.isArray(verification["error-codes"]) ? verification["error-codes"] : [];
 
     if (!verification.success) {
-      // A bad secret is our problem, not the visitor's: report it as a server
-      // error so the client can say "try again later" instead of "you are a bot".
       if (codes.includes("invalid-input-secret") || codes.includes("missing-input-secret")) {
         console.error("[recaptcha-verify] Google rejected the configured secret:", codes.join(", "));
         return json(
@@ -134,11 +124,6 @@ export default {
           500,
         );
       }
-      // Codes that mean "Google could not evaluate this browser" (browser-error
-      // is undocumented and shows up for automation, WebViews and privacy
-      // browsers) are an infrastructure outcome, not a bot verdict. Treating
-      // them as `rejected` would lock real visitors out of the museum, so they
-      // degrade like an outage instead. Genuine verdicts stay below.
       const unevaluable = new Set(["browser-error", "bad-request"]);
       if (codes.length > 0 && codes.every((code) => unevaluable.has(code))) {
         console.warn("[recaptcha-verify] Google could not evaluate the browser:", codes.join(", "));

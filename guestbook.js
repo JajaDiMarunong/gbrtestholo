@@ -1,6 +1,3 @@
-// Guestbook page: yung malaking corkboard sa labas ng museum, na may sticky
-// notes ng bisita. Ito yung separate page (guestbook.html), hindi kasama sa app.
-// Tumatakbo to nang matagal sa isang screen, kaya may auto-refresh at clock.
 const FIREBASE_URL = "https://gbrmuseumtest-default-rtdb.asia-southeast1.firebasedatabase.app";
 
 const BOARD_WIDTH = 1600;
@@ -420,9 +417,6 @@ function getNoteJitterLimit(rotation, grid) {
   };
 }
 
-// Kung saan nakaupo yung bawat note. Deterministic to: parehong notes,
-// parehong pwesto, kahit i-refresh mo pa. Wag mong gawing plain random, kasi
-// nag-jujump-jump yung mga note sa board at mukhang sira.
 function buildNotesLayout(notes) {
   const grid = getNotesBoardGrid(notes.length);
   const slotOrder = getShuffledNoteSlots(grid);

@@ -30,10 +30,8 @@ export default {
     const method = req.method;
 
     try {
-      // POST /artworks - Create new artwork
       if (method === "POST" && path === "/artworks") {
         const body = await req.json();
-        // Inline validation
         const required = ["name", "details", "imageUrl", "markerImageUrl"];
         for (const field of required) {
           if (!body[field] || typeof body[field] !== "string") {
@@ -77,7 +75,6 @@ export default {
         return new Response(JSON.stringify({ id: artworkId, ...sanitized }), { status: 201, headers: cors });
       }
 
-      // PATCH /artworks/:id - Update artwork settings
       if (method === "PATCH" && path.startsWith("/artworks/")) {
         const artworkId = path.split("/")[2];
         const body = await req.json();
@@ -112,7 +109,6 @@ export default {
         return new Response(JSON.stringify({ success: true }), { status: 200, headers: cors });
       }
 
-      // PUT /arBundleCurrent - Publish AR bundle manifest
       if (method === "PUT" && path === "/arBundleCurrent") {
         const body = await req.json();
         const required = ["version", "mindUrl", "targets"];
@@ -141,21 +137,18 @@ export default {
         return new Response(JSON.stringify({ success: true }), { status: 200, headers: cors });
       }
 
-      // DELETE /leaderboard - Clear all leaderboard entries
       if (method === "DELETE" && path === "/leaderboard") {
         const response = await fetch(`${FIREBASE_URL}/leaderboard.json?auth=${idToken}`, { method: "DELETE" });
         if (!response.ok) throw new Error(`Firebase delete failed: ${response.status}`);
         return new Response(JSON.stringify({ success: true }), { status: 200, headers: cors });
       }
 
-      // DELETE /notes - Clear all notes
       if (method === "DELETE" && path === "/notes") {
         const response = await fetch(`${FIREBASE_URL}/notes.json?auth=${idToken}`, { method: "DELETE" });
         if (!response.ok) throw new Error(`Firebase delete failed: ${response.status}`);
         return new Response(JSON.stringify({ success: true }), { status: 200, headers: cors });
       }
 
-      // DELETE /artworks/:id - Delete specific artwork
       if (method === "DELETE" && path.startsWith("/artworks/")) {
         const artworkId = path.split("/")[2];
         const response = await fetch(`${FIREBASE_URL}/artworks/${artworkId}.json?auth=${idToken}`, { method: "DELETE" });

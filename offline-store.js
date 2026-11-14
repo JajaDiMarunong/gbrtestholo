@@ -1,7 +1,3 @@
-// Offline store: cache ng mga sagot galing Firebase, pila ng writes pag walang
-// net, at yung unang download ng assets para may laman agad kahit offline.
-// TANGINA WAG TATANGGALIN yung queue — dito dumadaan yung notes at leaderboard
-// na naipost habang walang signal. Pag inalis mo to, nawawala yung post nila.
 (function () {
   "use strict";
   const DB_NAME = "gbr-museum-offline";
@@ -140,8 +136,6 @@
     window.dispatchEvent(new CustomEvent("museum-offline-queued", { detail: entry }));
   }
 
-  // Isinusubmit ulit yung mga naipon habang offline. Pag pumalya, ibinabalik
-  // sa queue at susubukan ulit next time — walang nawawalang post.
   async function flushQueue() {
     if (!navigator.onLine) return;
     const entries = await allQueued();
@@ -215,9 +209,6 @@
     }
   };
 
-  // Hinahatak lahat ng asset sa asset-manifest para offline-ready agad yung
-  // app. Dahan-dahan to kaya may progress callback — ipakita mo sa bisita,
-  // kung hindi iisipin niyang nag-hang yung app.
   async function preloadAssets(onProgress) {
     const assets = Array.from(new Set(window.MUSEUM_ASSETS || []));
     if (!assets.length || !window.caches) return { completed: 0, total: 0, failed: 0 };

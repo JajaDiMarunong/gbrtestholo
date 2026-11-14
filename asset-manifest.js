@@ -1,12 +1,6 @@
 
-// Version na lumalabas sa Settings ng app at ng admin.
-// Tuwing may binago ka sa kahit anong file, taasan mo to — kasabay ng ?v= sa
-// index.html at ng cache version sa sw.js.
 self.APP_VERSION = "1.10.24";
 
-// Listahan ng files na kukunin ng service worker at ng offline-store.
-// Pag may bagong image/js/css, IDAGDAG MO DITO. Kalimutan mo yan, wala siya
-// offline at magmumukhang sira yung app pag mahina ang signal.
 const MUSEUM_ASSETS = [
   "./", "./index.html", "./style.css", "./app.js", "./offline-store.js", "./manifest.webmanifest",
   "./recaptcha.js", "./asset-manifest.js", "./sw.js", "./guestbook.html", "./guestbook.css",

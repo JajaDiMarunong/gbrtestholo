@@ -1,6 +1,3 @@
-// reCAPTCHA v3 helper — invisible, walang checkbox. Ginagamit to ng entry gate
-// at ng mga write (notes, leaderboard) sa Supabase function.
-// Ang pass ng bisita 6 hours lang, tapos kailangan niyang i-verify ulit.
 (function () {
   "use strict";
 

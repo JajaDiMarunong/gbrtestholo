@@ -20,10 +20,6 @@ const JSON_MODELS = [
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
-// Model ids that are not general-purpose chat models. The last-resort picker
-// below used to grab whichever id came first in the catalogue, which can be a
-// guard, TTS, embedding or translation model that answers a cataloging prompt
-// with empty content.
 const NON_CHAT_MODEL_HINTS = [
   "whisper", "orpheus", "tts", "guard", "allam", "embedding", "rerank", "moderation", "safety",
 ];
@@ -42,9 +38,6 @@ function getClientIp(req: Request): string {
   return req.headers.get("x-real-ip") || "unknown";
 }
 
-// One AI Fill is a single request now, but the console may still retry, and the
-// public chat widget must not be able to use up that allowance (or be blocked by
-// it). JSON mode therefore has its own, larger bucket.
 const CHAT_RATE_LIMIT = 10;
 const JSON_RATE_LIMIT = 30;
 
@@ -180,9 +173,6 @@ interface GroqAttempt {
   retryAfterMs: number | null;
 }
 
-// Groq reports its tokens-per-minute budget through Retry-After (the header can
-// be fractional, e.g. "7.5") and repeats the same delay in the message body:
-// "Please try again in 4.1325s". Either source is good enough to wait on.
 function parseRetryAfterMs(res: Response, bodyText: string): number | null {
   const header = res.headers.get("retry-after");
   const headerSeconds = Number(header);
@@ -197,9 +187,6 @@ function parseRetryAfterMs(res: Response, bodyText: string): number | null {
   return null;
 }
 
-// A chat bubble cannot sit on a spinner for half a minute, so the automatic
-// retry waits at most this long. The Retry-After we hand back still carries the
-// real delay, so the widget can tell the visitor when to come back.
 const CHAT_RETRY_WAIT_MS = 4000;
 
 function clampRetryWait(ms: number | null): number {
@@ -222,10 +209,6 @@ function postGroq(payload: Record<string, unknown>): Promise<Response> {
   });
 }
 
-// One Groq call that reports why a response was unusable instead of hiding it.
-// Groq answers HTTP 200 with empty message.content when a model runs out of
-// output budget or declines, which is what the admin console used to see as
-// "Sorry, I couldn't come up with an answer for that." inside a JSON request.
 async function callGroq(
   model: string,
   systemContent: string,
@@ -240,12 +223,10 @@ async function callGroq(
     max_tokens: maxTokens,
   };
   if (isJsonMode) payload.response_format = { type: "json_object" };
-  // gpt-oss models spend the output budget on hidden reasoning unless limited.
   if (model.includes("gpt-oss")) payload.reasoning_effort = "low";
 
   let res = await postGroq(payload);
   if (res.status === 400) {
-    // Some models reject response_format / reasoning_effort; retry without them.
     const bodyText = await res.text();
     console.warn("[groq-proxy] 400 from", model, "- retrying without optional params:", bodyText.slice(0, 200));
     delete payload.response_format;
@@ -284,7 +265,6 @@ async function callGroq(
 
 export default {
   fetch: async (req: Request) => {
-    // Handle CORS preflight
     const corsResponse = handleCors(req);
     if (corsResponse) return corsResponse;
 
@@ -292,7 +272,6 @@ export default {
       return errorResponse("Method not allowed", 405);
     }
 
-    // The key lives in the GROQ_API_KEY secret, never in the source.
     if (!GROQ_API_KEY) {
       console.error("[groq-proxy] GROQ_API_KEY is not set");
       return errorResponse("The museum guide is not configured right now.", 500);
@@ -309,14 +288,8 @@ export default {
       }
 
       const isJsonMode = jsonMode || (systemPrompt && systemPrompt.includes("JSON"));
-      // The chat widget always sends its own prompt. A bare caller (a probe, an
-      // older cached page) used to fall back to "You are a helpful assistant.",
-      // which has no identity rules and happily names its model, so the default
-      // is now the museum guide itself — persona, artwork rules and WHO YOU ARE.
       const systemContent = systemPrompt || buildSystemPrompt([]);
 
-      // Rate limiting happens after the mode is known, so an AI Fill and the chat
-      // bubble draw from separate per-minute budgets.
       const rateLimit = checkRateLimit(
         isJsonMode ? `${ip}:json` : ip,
         isJsonMode ? JSON_RATE_LIMIT : CHAT_RATE_LIMIT,
@@ -328,10 +301,6 @@ export default {
         });
       }
 
-      // The admin AI fill pastes reference documents, so JSON mode gets a far
-      // larger budget than the public chat widget: a whole article, or one
-      // slice of a condensed one, arrives as a single user message. The request
-      // total is still capped so one call cannot balloon.
       const perMessageCap = isJsonMode ? 24000 : 4000;
       const totalCap = isJsonMode ? 48000 : perMessageCap * 20;
       let sanitizedMessages = messages.slice(-20).map((m: any) => ({
@@ -354,10 +323,6 @@ export default {
       }
 
       if (!isJsonMode) {
-        // The widget replays the conversation with every question. Once the
-        // thread grows past a few thousand characters the oldest turns are
-        // dropped so a long visit cannot push the request over the per-minute
-        // token budget on its own.
         const chatTotalCap = 6000;
         let chatChars = sanitizedMessages.reduce(
           (sum: number, m: { content: string }) => sum + m.content.length,
@@ -375,9 +340,6 @@ export default {
         : isJsonMode ? 2600 : 300;
 
       if (isJsonMode) {
-        // Walk the JSON-capable models until one returns real content. Callers
-        // that ask for JSON (the admin AI fill) cannot use a prose fallback, so
-        // an empty answer is reported as an error with the upstream reason.
         const baseModel = model || (await resolveGroqModel(true));
         const candidates = [baseModel, ...JSON_MODELS]
           .filter((m: string, index: number, arr: string[]) => m && arr.indexOf(m) === index)
@@ -405,8 +367,6 @@ export default {
           if (attempt.finishReason === "length") maxTokens = Math.min(maxTokens * 2, 8000);
         }
 
-        // A rate limit is not an empty answer, and the admin page needs the
-        // Retry-After value to decide whether waiting is worthwhile.
         if (last?.status === 429) {
           return new Response(
             JSON.stringify({
@@ -440,10 +400,6 @@ export default {
       const resolvedModel = model || (await resolveGroqModel(false));
       let attempt = await callGroq(resolvedModel, systemContent, sanitizedMessages, false, maxTokens);
 
-      // The guide prompt is a few thousand tokens on its own, so a visitor who
-      // asks two questions inside the same minute used to blow Groq's free-tier
-      // budget and get an instant "AI service unavailable". Wait out the delay
-      // Groq asks for once, instead of reporting an outage.
       if (attempt.status === 429) {
         const waitMs = clampRetryWait(attempt.retryAfterMs);
         console.warn("[groq-proxy] Chat rate limited; retrying in", waitMs, "ms");
@@ -470,7 +426,6 @@ export default {
       }
 
       if (!attempt.content && attempt.status !== 200) {
-        // Keep the chat bubble working even when Groq is unreachable.
         console.error("[groq-proxy] Chat request failed:", attempt.status, attempt.error);
         return errorResponse("AI service unavailable", 502);
       }

@@ -1,38 +1,11 @@
-// "Learn More" lookup for a single artwork: Tavily finds the pages, Groq
-// rewrites them into a short brief.
-//
-// The browser never sees either key. It posts only the artwork metadata it
-// already has; this function owns the query, the prompt and the keys, and
-// returns a short brief plus the pages the brief is based on.
-//
-// Each half has a fallback, because a museum counter cannot wait on a retry:
-//   * if Tavily answers but Groq is rate limited (the free tier is per minute),
-//     the card is filled with Tavily's own synthesised answer instead of an
-//     error, and the payload says engine: "tavily";
-//   * if Tavily itself is out of credits (HTTP 432) the card says so in plain
-//     words instead of blaming the visitor's connection.
-//
-// Abuse control lives here, not in the app:
-//   * the query and prompt cannot be replaced or extended by the caller, so the
-//     endpoint cannot be rented out as a general purpose search/summary proxy;
-//   * the output budget is fixed and small;
-//   * per-device, per-IP and global counters cap how much quota one visitor (or
-//     one leaked URL) can burn;
-//   * answers are cached per artwork for a week, so a busy day reuses one search;
-//   * LEARN_MORE_ENABLED=false turns the feature off without a redeploy.
 
 import "@supabase/functions-js/edge-runtime.d.ts";
 
 const TAVILY_API_KEY = (Deno.env.get("TAVILY_API_KEY") || "").trim();
 const TAVILY_ENDPOINT = "https://api.tavily.com/search";
-// "advanced" returns fuller page excerpts, which is what the brief is written
-// from; "basic" is cheaper per credit if the plan is tight.
 const TAVILY_DEPTH = (Deno.env.get("TAVILY_SEARCH_DEPTH") || "").trim() === "basic" ? "basic" : "advanced";
 const TAVILY_MAX_RESULTS = 6;
 
-// Never cited: social networks, image dumps and SEO farms. Kept short on purpose —
-// a local heritage group on Facebook sometimes carries the only photo of an old
-// bridge, but it is not something a museum should present as its source.
 const EXCLUDED_DOMAINS = [
   "facebook.com",
   "instagram.com",
@@ -43,9 +16,6 @@ const EXCLUDED_DOMAINS = [
 
 const GROQ_API_KEY = (Deno.env.get("GROQ_API_KEY") || "").trim();
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-// Same catalogue the chat proxy prefers, ordered so answer quality comes first.
-// A retired id is skipped on a 400/404 instead of ending the request, so this
-// list can go stale without breaking Learn More.
 const LEARN_MODELS = [
   "llama-3.3-70b-versatile",
   "openai/gpt-oss-20b",
@@ -56,9 +26,6 @@ const LEARN_MODELS = [
 
 const ENABLED = (Deno.env.get("LEARN_MORE_ENABLED") || "true").toLowerCase() !== "false";
 
-// Comma separated list, e.g. "https://gbrmuseumtest.web.app,https://gbrmuseumtest.firebaseapp.com".
-// Empty means "any origin", which is acceptable because no credential is exposed
-// by a cross-origin call, and the counters below still apply to whoever calls.
 const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") || "")
   .split(",")
   .map((origin) => origin.trim().replace(/\/$/, ""))
@@ -72,24 +39,12 @@ function envNumber(name: string, fallback: number): number {
 const DEVICE_HOURLY_LIMIT = envNumber("LEARN_DEVICE_HOURLY_LIMIT", 8);
 const DEVICE_DAILY_LIMIT = envNumber("LEARN_DEVICE_DAILY_LIMIT", 30);
 const IP_MINUTE_LIMIT = envNumber("LEARN_IP_MINUTE_LIMIT", 20);
-// Each Tavily search costs a credit (1 basic, 2 advanced) and the free plan is
-// 1,000 credits a month. At 2 credits a search, 15 searches a day stays inside
-// that plan even with no cache hits, and the week-long cache below means a busy
-// Saturday normally reuses the morning's searches instead of adding new ones.
-// Raise this after upgrading; the number is the hard stop on the account.
 const GLOBAL_DAILY_LIMIT = envNumber("LEARN_GLOBAL_DAILY_LIMIT", 15);
 
-// Searches cost credits, and artwork histories change slowly, so a page stays
-// cached for a week rather than a morning.
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 120;
 
-// How long the summarising step may take before Tavily's own answer is used
-// instead. The app cancels the request at 30 s, so this plus the search has to
-// stay comfortably under that.
 const SUMMARY_BUDGET_MS = 13000;
-// A single model attempt. A visitor waiting on the card should never feel one
-// slow model.
 const GROQ_ATTEMPT_MS = 9000;
 
 const MINUTE_MS = 60 * 1000;
@@ -167,7 +122,6 @@ function pruneCounters(now: number): void {
   }
 }
 
-// Fixed-window counter: `limit` calls allowed inside `windowMs`.
 function takeToken(key: string, windowMs: number, limit: number): { allowed: boolean; retryAfter: number } {
   const now = Date.now();
   pruneCounters(now);
@@ -202,8 +156,6 @@ interface ArtworkInput {
   details: string;
 }
 
-// The query is fixed on the server from artwork metadata, so this endpoint can
-// never be used as a general web-search proxy.
 function buildSearchQuery(artwork: ArtworkInput): string {
   const parts = [artwork.name];
   if (artwork.artist) parts.push(artwork.artist);
@@ -224,13 +176,11 @@ function buildPrompt(artwork: ArtworkInput, hits: SearchHit[]): string {
     artwork.location ? `museum location: ${artwork.location}` : "",
   ].filter(Boolean).join("; ");
 
-  // Numbered excerpts, so a claim in the brief can always be traced to a source
-  // the visitor can open. The list order matches the sources the app shows.
   const excerpts = hits.map((hit, index) => {
     let host = hit.url;
     try {
       host = new URL(hit.url).hostname.replace(/^www\./, "");
-    } catch (_) { /* keep the raw url */ }
+    } catch (_) {}
     return `[${index + 1}] ${hit.title} — ${host}\n${hit.content}`;
   }).join("\n\n");
 
@@ -266,8 +216,6 @@ interface ParsedAnswer {
   caution: string;
 }
 
-// The model is asked for JSON, but a stray sentence or a code fence should never
-// turn a good answer into an error: fall back to using the prose as the summary.
 function parseAnswer(rawText: string): ParsedAnswer {
   const text = String(rawText || "").replace(/```json/gi, "").replace(/```/g, "").trim();
   const start = text.indexOf("{");
@@ -294,9 +242,6 @@ function parseAnswer(rawText: string): ParsedAnswer {
     }
   }
 
-  // Keep the card readable no matter what the model returned. Blank lines are
-  // preserved (the app renders one paragraph each) while every line is still
-  // stripped of markup and control characters.
   summary = summary
     .split(/\n+/)
     .map((line) => sanitizeText(line.replace(/\s+/g, " "), 700))
@@ -324,8 +269,6 @@ function hitsToSources(hits: SearchHit[]): WebSource[] {
   return sources;
 }
 
-// Tavily's own answer, reshaped into the same one-paragraph-per-line form the
-// card renders. Used when Groq cannot rewrite the excerpts.
 function tidyAnswer(raw: string): string {
   return String(raw || "")
     .replace(/^#{1,6}\s*/gm, "")
@@ -355,16 +298,11 @@ async function requestTavily(query: string): Promise<TavilyResult> {
     search_depth: TAVILY_DEPTH,
     max_results: TAVILY_MAX_RESULTS,
     topic: "general",
-    // Costs nothing extra and doubles as the fallback brief if Groq is out.
     include_answer: "advanced",
     include_raw_content: false,
     include_images: false,
-    // Museum briefs should rest on pages a visitor can trust. Social posts and
-    // stock aggregators are dropped before the excerpts are ever written.
     exclude_domains: EXCLUDED_DOMAINS,
   };
-  // Tavily only accepts chunks_per_source on the advanced depth; sending it with
-  // basic is rejected as an invalid request.
   if (TAVILY_DEPTH === "advanced") body.chunks_per_source = 3;
 
   try {
@@ -386,10 +324,8 @@ async function requestTavily(query: string): Promise<TavilyResult> {
         const err = JSON.parse(raw);
         const detail = err?.detail;
         message = (typeof detail === "string" && detail) || detail?.error || err?.error || err?.message || message;
-      } catch (_) { /* non-JSON error body */ }
+      } catch (_) {}
       const headerRetry = Number(res.headers.get("retry-after"));
-      // 432 is Tavily's "plan credit limit reached" — waiting a minute will not
-      // help, so the card asks the visitor to come back later instead.
       const retryAfter = res.status === 432
         ? 6 * HOUR_MS / 1000
         : (Number.isFinite(headerRetry) && headerRetry > 0 ? headerRetry : 30);
@@ -437,7 +373,6 @@ async function requestGroq(model: string, prompt: string, timeoutMs: number): Pr
     max_tokens: 1200,
     response_format: { type: "json_object" },
   };
-  // gpt-oss models spend the output budget on hidden reasoning unless limited.
   if (model.includes("gpt-oss")) payload.reasoning_effort = "low";
 
   try {
@@ -451,7 +386,6 @@ async function requestGroq(model: string, prompt: string, timeoutMs: number): Pr
       signal: controller.signal,
     });
     if (res.status === 400) {
-      // Some models reject response_format / reasoning_effort; retry without them.
       console.warn("[learn-more] Groq 400 from", model, "- retrying without optional params");
       delete payload.response_format;
       delete payload.reasoning_effort;
@@ -473,12 +407,10 @@ async function requestGroq(model: string, prompt: string, timeoutMs: number): Pr
       try {
         const parsed = JSON.parse(raw);
         message = parsed?.error?.message || parsed?.message || message;
-      } catch (_) { /* non-JSON error body */ }
+      } catch (_) {}
       const headerRetry = Number(res.headers.get("retry-after"));
       const retryAfter = Number.isFinite(headerRetry) && headerRetry > 0 ? headerRetry : 30;
       console.warn("[learn-more] Groq failed:", model, res.status, String(message).slice(0, 200));
-      // 400/404 mean this model id is gone or unsupported; another one may still
-      // answer, so the caller moves down the list instead of giving up.
       return {
         ok: false,
         status: res.status,
@@ -517,8 +449,6 @@ interface SummarizeResult {
   failure: { status: number; retryAfter: number } | null;
 }
 
-// Walk the model list inside one overall budget, so one retired id, one 429 and
-// one slow model still add up to a single card the visitor can read.
 async function summarize(artwork: ArtworkInput, hits: SearchHit[]): Promise<SummarizeResult> {
   const prompt = buildPrompt(artwork, hits);
   const deadline = Date.now() + SUMMARY_BUDGET_MS;
@@ -530,9 +460,6 @@ async function summarize(artwork: ArtworkInput, hits: SearchHit[]): Promise<Summ
     const result = await requestGroq(model, prompt, Math.min(GROQ_ATTEMPT_MS, remaining));
     if (result.ok) return { text: result.text, model, failure: null };
     failure = { status: result.status, retryAfter: result.retryAfter };
-    // A 429 from Groq is usually the per-minute token bucket. Moving to the next
-    // model would spend the visitor's wait on a bucket that is just as empty, so
-    // only a missing/unsupported model is worth another attempt.
     if (!result.deadModel) break;
   }
 
@@ -580,15 +507,10 @@ const APP = {
       return errorResponse(req, "Missing artwork name", 400);
     }
 
-    // The device id is a random string kept in the app; it is not a security
-    // boundary (a determined visitor can clear it), it exists so one visitor
-    // cannot spend the whole day's search budget by refreshing the card.
     const deviceId = sanitizeId(req.headers.get("x-device-id"));
     const ip = getClientIp(req);
     const now = Date.now();
 
-    // Cheap gates first: a cached artwork costs nothing, so it is answered before
-    // either the IP or the global budget is touched.
     const cached = answerCache.get(artId);
     if (cached && now - cached.at < CACHE_TTL_MS) {
       return jsonResponse(req, { ...cached.payload, cached: true });
@@ -660,8 +582,6 @@ const APP = {
         }
       }
 
-      // Groq is the writer, not the source of truth: when it is rate limited the
-      // search engine's own answer still gives the visitor something to read.
       if (!summary && search.answer) {
         summary = search.answer;
         engine = "tavily";
@@ -685,8 +605,6 @@ const APP = {
         cached: false,
       };
 
-      // Only a search that produced something is cached; a thin result is left
-      // uncached so the next visitor can get a better one.
       if (summary) {
         answerCache.set(artId, { at: Date.now(), payload });
         pruneCache(Date.now());
