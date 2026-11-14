@@ -1,6 +1,4 @@
-/* ============================================
-   GBR Jr. Museum — Admin Console
-   ============================================ */
+
 :root {
   --bg: #0b0d10;
   --bg-elevated: #0f1216;
@@ -36,10 +34,7 @@ html, body {
   margin: 0;
   padding: 0;
   min-height: 100%;
-  /* The admin page scrolls as a whole, so the page itself is what a downward drag
-     at the top would reload — losing a half-filled form. This stops the browser
-     gesture in Chrome and Firefox; offline-store.js handles Safari, which ignores
-     this rule. */
+
   overscroll-behavior: none;
 }
 
@@ -63,7 +58,7 @@ svg { display: block; }
 
 .hidden { display: none !important; }
 
-/* ---------------- Shared type ---------------- */
+
 .eyebrow {
   margin: 0 0 4px;
   color: var(--gold);
@@ -73,7 +68,7 @@ svg { display: block; }
   text-transform: uppercase;
 }
 
-/* ---------------- Buttons ---------------- */
+
 .btn-primary, .btn-secondary, .btn-tiny {
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
@@ -127,7 +122,7 @@ svg { display: block; }
 .btn-tiny.danger { color: #f59a92; border-color: rgba(224, 107, 99, 0.32); background: var(--danger-soft); }
 .btn-tiny.danger:hover { background: rgba(224, 107, 99, 0.2); }
 
-/* ---------------- Inputs ---------------- */
+
 .text-input, .note-textarea, .date-select {
   width: 100%;
   color: var(--text);
@@ -212,7 +207,7 @@ svg { display: block; }
 
 .upload-hint { display: block; margin-top: 5px; color: var(--muted-2); font-size: 10.5px; line-height: 1.4; }
 
-/* ---------------- Login ---------------- */
+
 .login-screen {
   position: fixed;
   inset: 0;
@@ -334,9 +329,7 @@ svg { display: block; }
 .login-status.is-error { color: var(--danger); }
 .login-status.hidden { display: none; }
 .login-version { margin: 14px 0 0; text-align: center; color: var(--muted-2); font-size: 10.5px; letter-spacing: 0.02em; }
-/* recaptcha.js loads api.js with the default badge and hides it here (Google
-   400s on the undocumented badge=hidden value). The attribution footnote keeps
-   the notice visible without the badge. */
+
 .grecaptcha-badge { visibility: hidden !important; opacity: 0 !important; }
 .login-recaptcha-note { margin-top: 14px; color: var(--muted-2); font-size: 10.5px; line-height: 1.5; text-align: center; }
 .login-recaptcha-note a { color: var(--gold); text-decoration: none; }
@@ -357,7 +350,7 @@ svg { display: block; }
 }
 .brand-mark.small { width: 40px; height: 40px; border-radius: 12px; font-size: 11px; }
 
-/* ---------------- Modals ---------------- */
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -408,7 +401,7 @@ svg { display: block; }
 .ai-status.success { color: var(--success); }
 .ai-status.error { color: #f08c84; }
 
-/* ---------------- App shell ---------------- */
+
 .admin-shell { min-height: 100vh; }
 .admin-shell.hidden { display: none; }
 
@@ -532,7 +525,7 @@ svg { display: block; }
   padding: 28px 32px 56px;
 }
 
-/* ---------------- Section heading ---------------- */
+
 .section-intro {
   display: flex;
   align-items: flex-end;
@@ -563,7 +556,7 @@ svg { display: block; }
   font-variant-numeric: tabular-nums;
 }
 
-/* ---------------- KPI cards ---------------- */
+
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -613,7 +606,7 @@ svg { display: block; }
 }
 .live-pill .live-dot { width: 6px; height: 6px; box-shadow: none; }
 
-/* ---------------- Panels ---------------- */
+
 .panel {
   padding: 20px;
   background: var(--surface);
@@ -632,7 +625,7 @@ svg { display: block; }
 .panel-head .eyebrow { margin-bottom: 1px; }
 .panel-footnote { margin-top: 14px; color: var(--muted-2); font-size: 10.5px; line-height: 1.5; }
 
-/* ---------------- Account & About ---------------- */
+
 .account-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
 .panel-note { margin: -2px 0 16px; color: var(--text-dim); font-size: 12.5px; }
 .panel-note strong { color: var(--text); font-weight: 650; }
@@ -647,7 +640,7 @@ svg { display: block; }
 .analytics-grid-main { grid-template-columns: minmax(0, 1.9fr) minmax(280px, 0.85fr); margin-bottom: 14px; }
 .analytics-grid-secondary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
-/* ---------------- Visits chart ---------------- */
+
 .visits-filter { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
 .filter-tab {
   padding: 6px 10px;
@@ -667,9 +660,8 @@ svg { display: block; }
   border-color: rgba(201, 168, 106, 0.26);
 }
 
-/* ---------------- Date filters on the moderator lists ---------------- */
-/* The leaderboard and guestbook tabs add a range/day filter above their list;
-   the tabs reuse .filter-tab so both toolbars look and behave the same. */
+
+
 .list-filter-bar {
   display: flex;
   flex-wrap: wrap;
@@ -746,7 +738,7 @@ svg { display: block; }
 }
 .visits-chart-total { margin-top: 10px; color: var(--muted-2); font-size: 11px; text-align: right; }
 
-/* ---------------- Insights ---------------- */
+
 .insight-list { margin: 0; padding: 0; list-style: none; }
 .insight-list li {
   display: flex;
@@ -761,7 +753,7 @@ svg { display: block; }
 .insight-list span { color: var(--muted); }
 .insight-list strong { color: var(--text); font-weight: 650; text-align: right; font-variant-numeric: tabular-nums; }
 
-/* ---------------- Note mix / readiness ---------------- */
+
 
 .mix-list { display: flex; flex-direction: column; gap: 15px; }
 .mix-row-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 6px; color: var(--muted); font-size: 11.5px; }
@@ -802,7 +794,7 @@ svg { display: block; }
 .mini-stats span { color: var(--muted-2); font-size: 9.5px; font-weight: 650; letter-spacing: 0.05em; text-transform: uppercase; }
 .mini-stats strong { font-size: 17px; font-weight: 650; font-variant-numeric: tabular-nums; }
 
-/* ---------------- Artworks ---------------- */
+
 .artworks-layout { display: block; }
 .upload-panel, .artworks-list-panel { padding: 22px; }
 .artworks-list-panel { min-height: 420px; }
@@ -811,7 +803,7 @@ svg { display: block; }
 .section-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .btn-inline { width: auto; margin-top: 0; }
 
-/* ---------------- Artwork drawer ---------------- */
+
 body.drawer-open { overflow: hidden; }
 .drawer-backdrop {
   position: fixed;
@@ -889,7 +881,7 @@ body.drawer-open { overflow: hidden; }
 .drawer-footer-actions .btn-secondary { flex: 0 0 34%; }
 .drawer-footer-actions .btn-primary { flex: 1; margin-top: 0; }
 
-/* ---------------- Collection controls ---------------- */
+
 .collection-toolbar {
   display: flex;
   align-items: center;
@@ -963,7 +955,7 @@ body.drawer-open { overflow: hidden; }
   text-transform: uppercase;
 }
 
-/* ---------------- Quiz builder ---------------- */
+
 .quiz-section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .quiz-section-head .form-section-title { margin-bottom: 10px; }
 .quiz-editor-list { display: flex; flex-direction: column; gap: 14px; margin-top: 12px; }
@@ -1010,7 +1002,7 @@ body.drawer-open { overflow: hidden; }
 .quiz-option-hint { margin: 10px 0 0; color: var(--muted-2); font-size: 10.5px; line-height: 1.5; }
 .artwork-drawer.quiz-mode .quiz-hidden { display: none; }
 
-/* ---------------- Hologram sign editor ---------------- */
+
 .hologram-modal-card { max-width: 560px; }
 .hologram-modal-card h3 { margin: 0 0 6px; font-size: 20px; }
 .hologram-enable-row { margin: 16px 0 4px; }
@@ -1222,7 +1214,7 @@ body.drawer-open { overflow: hidden; }
 .ar-publish-panel .btn-primary { margin-top: 12px; }
 .ar-publish-panel .upload-status { text-align: left; }
 
-/* ---------------- Lists / tables ---------------- */
+
 .table-panel { padding: 16px; }
 .admin-section-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .admin-section-actions { display: flex; flex-wrap: wrap; gap: 7px; }
@@ -1319,7 +1311,7 @@ body.drawer-open { overflow: hidden; }
 
 .leaderboard-status { padding: 18px 4px; color: var(--muted); font-size: 12.5px; }
 
-/* ---------------- Marker quality ---------------- */
+
 .marker-quality-wrap {
   margin-top: 12px;
   padding: 13px;
@@ -1346,7 +1338,7 @@ body.drawer-open { overflow: hidden; }
 .quality-rating.poor { color: var(--danger); }
 #marker-test-status { display: block; margin-top: 10px; font-size: 11px; text-align: left; }
 
-/* ---------------- Responsive ---------------- */
+
 @media (max-width: 1280px) {
   .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .analytics-grid-secondary { grid-template-columns: 1fr 1fr; }

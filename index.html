@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!--
+    GBR Jr. Museum AR — index page ng bisita.
+    Pag may binago ka sa app.js, taasan mo yung ?v= sa pinakababang script,
+    pati yung APP_VERSION at yung cache version sa sw.js. Pag hindi, yung luma
+    pa rin ang bubuksan ng phone at iisipin mong walang nangyari sa fix mo.
+  -->
    <script>
     window.deferredInstallPrompt = null;
     window.addEventListener('beforeinstallprompt', function(e) {
@@ -24,6 +30,9 @@
 
 <script src="asset-manifest.js"></script>
 <script src="offline-store.js?v=1"></script>
+<!-- mind-ar tweak: pinapalambot yung detection thresholds ng mind-ar kasi
+     sobrang higpit niya sa malabo o murang camera. Wag mong tatanggalin
+     nang hindi nag-re-retest sa actual na phone. -->
 <script>
   (() => {
     const nativeAtob = window.atob.bind(window);
@@ -43,8 +52,6 @@
 <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.0.0/dist/aframe-extras.min.js" defer></script>
 <base target="_blank">
 <script>
-  // A tab that already passed the reCAPTCHA gate must not flash the overlay on
-  // reload. recaptcha.js writes the same key and expiry format.
   try {
     if (Number(sessionStorage.getItem("gbr.recaptcha.expires")) > Date.now()) {
       document.documentElement.classList.add("recaptcha-passed");
@@ -54,8 +61,8 @@
 </head>
 <body>
 
-  <!-- reCAPTCHA v3 entry gate: covers the museum until Google scores the
-       browser (see recaptcha.js). Tabs that already passed skip it. -->
+
+
   <div id="recaptcha-gate" class="recaptcha-gate" role="dialog" aria-modal="true" aria-labelledby="recaptcha-gate-title">
     <div class="recaptcha-gate-card">
       <div class="recaptcha-gate-mark" aria-hidden="true">GBR</div>
@@ -78,9 +85,9 @@
 
   <div id="screen-username" class="modal-overlay">
     <div class="modal-card">
-      <!-- Step 1: the visitor types a name. It only leaves this step once the
-           name is free, or once the visitor confirms the suggested suffix in
-           step 2. -->
+
+
+
       <div id="username-step-pick" class="username-step">
         <p class="modal-eyebrow">Welcome</p>
         <h2>What should we call you?</h2>
@@ -89,8 +96,8 @@
         <p id="username-status" class="username-status hidden" role="status" aria-live="polite"></p>
         <button id="btn-username-submit" class="btn-primary" type="button">Enter Gallery</button>
       </div>
-      <!-- Step 2: the typed name is already in use, so the next free
-           "Name(2), Name(3)…" is spelled out and must be confirmed. -->
+
+
       <div id="username-step-confirm" class="username-step username-confirm hidden" role="alertdialog" aria-labelledby="username-confirm-title" aria-describedby="username-confirm-desc">
         <p class="modal-eyebrow">Name already taken</p>
         <h2 id="username-confirm-title">That name is taken</h2>
@@ -616,6 +623,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 
+  <!-- Firebase config. Public lang lahat ng nasa baba — walang secret dito.
+       Yung totoong keys, nasa Firebase/Supabase secrets. -->
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyAqhByx12wmk-fSGdkvZmu9LKlBZbKAy6k",
@@ -631,6 +640,8 @@
   </script>
 
   <script src="recaptcha.js?v=6" defer></script>
-  <script src="app.js?v=76" defer></script>
+  <!-- Ito yung buong app. Yung ?v= dapat tumaas every change (77 -> 78...),
+       kasama ng APP_VERSION sa asset-manifest.js at ng cache version sa sw.js. -->
+  <script src="app.js?v=77" defer></script>
 </body>
 </html>

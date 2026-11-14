@@ -1,11 +1,14 @@
 importScripts("./asset-manifest.js");
 
-const CACHE_NAME = "gbr-museum-assets-v69";
-const DATA_CACHE = "gbr-museum-runtime-v69";
+// Taasan mo yung version (v70 -> v71) tuwing may ini-deploy kang bago.
+// TANGINA WAG MO TO KALIMUTAN — pag hindi mo itinaas, yung luma pa rin ang
+// ibibigay ng cache sa phone at iisipin mong hindi umubra yung fix mo.
+const CACHE_NAME = "gbr-museum-assets-v70";
+const DATA_CACHE = "gbr-museum-runtime-v70";
 
-// reCAPTCHA v3 (recaptcha.js) needs google.com for its loader script, its
-// hidden anchor iframe and its badge image; siteverify itself is called from
-// the recaptcha-verify edge function, not from the page.
+// Security headers na dinidikit sa bawat response na dinadaanan namin.
+// Dito naka-depende yung reCAPTCHA at Firebase, kaya pag hinaan mo to,
+// sumasabog yung app sa console.
 const CSP_HEADER = "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net https://aframe.io https://www.gstatic.com https://www.google.com https://recaptcha.google.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co https://www.gstatic.com https://www.google.com https://recaptcha.google.com; connect-src 'self' blob: https://*.firebasedatabase.app https://*.supabase.co https://twkgioiyfjfkppzerdii.functions.supabase.co https://cdn.jsdelivr.net https://www.gstatic.com https://aframe.io https://gbrmuseumtest.firebaseapp.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://twkgioiyfjfkppzerdii.supabase.co https://www.google.com https://recaptcha.google.com wss://*.firebasedatabase.app; frame-src https://www.google.com https://recaptcha.google.com; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
 
 self.addEventListener("install", (event) => {
@@ -42,6 +45,10 @@ function addSecurityHeaders(response) {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
+// Cache-first: pag nasa cache, yun ang ibigay (mabilis, at gumagana offline).
+// Pag wala, subukan ang net tapos i-cache. Pag na-timeout o pumalya, ibigay na
+// lang yung index.html para hindi blank page ang maabutan ng bisita.
+// Yung database host lang ang hindi namin pinapakialaman — live data yun.
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);

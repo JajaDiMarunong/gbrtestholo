@@ -1,36 +1,14 @@
-/* Google reCAPTCHA v3 (invisible) — shared client helper.
-   Loaded by index.html (entry gate) and admin.html (login check).
-
-   Only the public site key lives here. The shared secret stays in the
-   `recaptcha-verify` edge function (Supabase function secret
-   RECAPTCHA_SECRET_KEY), which judges the score and the action name.
-
-   Fail-open vs fail-closed:
-   - The museum gate fails open when Google or the edge function cannot be
-     reached, because the museum is an offline-first PWA and a network outage
-     must not lock visitors out. A low score still blocks the page.
-   - The admin login fails closed on a verdict — a low score, a rejected token
-     or an action mismatch means no sign-in. It only degrades when the verifier
-     itself is unreachable (not deployed yet, Supabase down, no network),
-     because Firebase still checks the password and a broken verifier must not
-     lock the curator out of the panel. */
+// reCAPTCHA v3 helper — invisible, walang checkbox. Ginagamit to ng entry gate
+// at ng mga write (notes, leaderboard) sa Supabase function.
+// Ang pass ng bisita 6 hours lang, tapos kailangan niyang i-verify ulit.
 (function () {
   "use strict";
 
   const SITE_KEY = "6LduFx4uAAAAAIbhUmAqwZ9Ihl9P7yQZH9qvmQln";
   const VERIFY_URL = "https://twkgioiyfjfkppzerdii.functions.supabase.co/functions/v1/recaptcha-verify";
-  // Only the documented `badge` values (bottomright, bottomleft, inline) are
-  // accepted: Google answers `badge=hidden` with an HTML "400 Bad Request" page,
-  // and Chrome blocks that HTML served as a script (net::ERR_BLOCKED_BY_ORB), so
-  // the loader never runs. The default badge is injected and hidden with the
-  // `.grecaptcha-badge` rule in style.css/admin.css instead; Google's terms
-  // require the attribution to stay visible, so the gate, the Settings screen
-  // (style.css) and the admin sign-in card (admin.css) print it as plain text.
   const SCRIPT_SRC = `https://www.google.com/recaptcha/api.js?render=${SITE_KEY}`;
   const SCRIPT_ID = "gbr-recaptcha-script";
 
-  // One passing score covers the rest of the tab's session (six hours), so a
-  // reload or a trip to the guestbook does not re-run the gate.
   const SESSION_KEY = "gbr.recaptcha.expires";
   const SESSION_TTL_MS = 6 * 60 * 60 * 1000;
 
@@ -68,7 +46,6 @@
     try {
       window.sessionStorage.setItem(SESSION_KEY, String(Date.now() + (ttlMs || SESSION_TTL_MS)));
     } catch (err) {
-      // Private mode without storage: the gate simply runs again next reload.
     }
   }
 
@@ -76,12 +53,9 @@
     try {
       window.sessionStorage.removeItem(SESSION_KEY);
     } catch (err) {
-      // Ignore: nothing was stored.
     }
   }
 
-  // Injects https://www.google.com/recaptcha/api.js once and resolves with the
-  // grecaptcha object once it is ready to execute.
   function load() {
     if (window.grecaptcha && typeof window.grecaptcha.execute === "function") {
       return Promise.resolve(window.grecaptcha);
@@ -125,7 +99,6 @@
       if (!existing) document.head.appendChild(script);
     });
 
-    // A failed load must be retryable (the gate offers "Try again").
     loaderPromise = promise.catch((error) => {
       loaderPromise = null;
       throw error;
@@ -139,26 +112,14 @@
     try {
       token = await grecaptcha.execute(SITE_KEY, { action });
     } catch (err) {
-      // Google refused to mint a token: the site key does not cover this domain,
-      // the script was blocked, or the network dropped. Report it as a
-      // configuration/availability problem so the museum gate fails open and the
-      // admin card can say "unavailable" instead of showing a raw Google error.
       throw makeError("misconfigured", (err && err.message) || "reCAPTCHA could not run on this page.", { cause: err });
     }
     if (!token) throw makeError("rejected", "reCAPTCHA returned an empty token.");
     return token;
   }
 
-  // Error codes this helper agrees on with the recaptcha-verify edge function.
-  // Anything else (for example the gateway's NOT_FOUND when the function has not
-  // been deployed yet) is translated from the HTTP status instead of trusted,
-  // so an infrastructure problem never looks like a rejected visitor.
   const KNOWN_CODES = ["rejected", "low-score", "action-mismatch", "unavailable", "misconfigured"];
 
-  // Runs the token through the edge function. Resolves with
-  // { success, action, score, threshold, ... } or throws an Error whose `code`
-  // is one of: rejected, low-score, action-mismatch, unavailable, network,
-  // timeout, misconfigured.
   async function verify(action) {
     const token = await execute(action);
     const controller = new AbortController();
@@ -168,11 +129,6 @@
     try {
       response = await window.fetch(VERIFY_URL, {
         method: "POST",
-        // The function speaks JSON and answers the CORS preflight (OPTIONS -> 204
-        // with Access-Control-Allow-Headers), which is what lets the browser send
-        // this POST. If the verifier is missing, the preflight fails, fetch()
-        // throws, and the caller treats it as "network": the gate fails open and
-        // admin sign-in degrades instead of blocking.
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, action }),
         signal: controller.signal,
@@ -196,7 +152,6 @@
 
     if (!response.ok) {
       const raw = data && typeof data.code === "string" ? data.code : "";
-      // 404 means the edge function is not deployed; 5xx/0 mean it is down.
       const fallback = response.status >= 500 || response.status === 404 ? "unavailable" : "rejected";
       throw makeError(KNOWN_CODES.includes(raw) ? raw : fallback, (data && (data.error || data.message)) || `The security check failed (HTTP ${response.status}).`, {
         status: response.status,
@@ -222,21 +177,16 @@
       return "The security check did not pass. Please try again.";
     }
     if (isUnavailable(error)) {
-      // Never surface a gateway string such as "Requested function was not found".
       return "The security check is unavailable right now. Please try again in a moment.";
     }
     return (error && error.message) || "The security check failed. Please try again.";
   }
 
-  // True when retrying cannot help: Google or the edge function is unreachable.
   function isUnavailable(error) {
     const code = error && error.code;
     return code === "unavailable" || code === "network" || code === "timeout" || code === "misconfigured";
   }
 
-  // Entry gate for index.html. It never rejects: the museum boots once the
-  // browser passes, and also when verification is unavailable (offline). A low
-  // score keeps the overlay up with a retry button.
   function runGate(options) {
     if (gatePromise) return gatePromise;
 

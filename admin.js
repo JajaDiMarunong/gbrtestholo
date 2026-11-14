@@ -1,18 +1,16 @@
-// =====================================================================
-// ADMIN PANEL — standalone page
-// =====================================================================
+// ══════════════════════════════════════════════════════════════════════
+//  ADMIN CONSOLE — admin.js
+//
+//  Dito nag-a-upload at nag-e-edit ng artworks yung staff, at dito rin
+//  pinupublish yung AR bundle na ginagamit ng scanner ng bisita.
+//
+//  TANGINA INGAT SA PUBLISH. Yung nasa admin, nakikita agad ng mga bisita.
+//  I-check mo yung art bago mo i-save.
+// ══════════════════════════════════════════════════════════════════════
 const FIREBASE_URL = "https://gbrmuseumtest-default-rtdb.asia-southeast1.firebasedatabase.app";
 const EDGE_FUNCTIONS_BASE = "https://twkgioiyfjfkppzerdii.functions.supabase.co/functions/v1";
 const GROQ_PROXY_URL = `${EDGE_FUNCTIONS_BASE}/groq-proxy`;
 
-// -------------------------------------------------------------------
-// Artworks
-// The collection lives entirely in Firebase, so the admin lists below only
-// ever hold uploads.
-// -------------------------------------------------------------------
-// -------------------------------------------------------------------
-// DOM refs
-// -------------------------------------------------------------------
 const screenLogin = document.getElementById("screen-login");
 const adminDashboard = document.getElementById("admin-dashboard");
 const adminPasswordInput = document.getElementById("admin-password-input");
@@ -24,7 +22,6 @@ const btnInstallAdminLogin = document.getElementById("btn-install-admin-login");
 const btnForgotPassword = document.getElementById("btn-forgot-password");
 const adminLoginStatus = document.getElementById("admin-login-status");
 
-// Account & About tab
 const accountTabButton = document.querySelector('.tab-btn[data-tab="account"]');
 const accountEmail = document.getElementById("account-email");
 const accountCurrentPassword = document.getElementById("account-current-password");
@@ -60,7 +57,6 @@ const adminNoteViewName = document.getElementById("admin-note-view-name");
 const btnAdminNoteViewClose = document.getElementById("btn-admin-note-view-close");
 const adminArtworksList = document.getElementById("admin-artworks-list");
 
-// AI Modal refs
 const aiModal = document.getElementById("ai-modal");
 const aiPasteInput = document.getElementById("ai-paste-input");
 const btnAiSubmit = document.getElementById("btn-ai-submit");
@@ -69,7 +65,6 @@ const btnOpenAiModal = document.getElementById("btn-open-ai-modal");
 const aiModalStatus = document.getElementById("ai-modal-status");
 const aiCharCount = document.getElementById("ai-char-count");
 
-// Form refs
 const imageUploadZone = document.getElementById("image-upload-zone");
 const artworkImageInput = document.getElementById("artwork-image");
 const imagePreview = document.getElementById("image-preview");
@@ -89,7 +84,6 @@ const artworkScannableInput = document.getElementById("artwork-scannable");
 const artworkPublishedInput = document.getElementById("artwork-published");
 const artworkHuntInput = document.getElementById("artwork-hunt");
 
-// Hologram sign editor (immersive view only)
 const hologramModal = document.getElementById("hologram-modal");
 const hologramModalTitle = document.getElementById("hologram-modal-title");
 const hologramModalArtwork = document.getElementById("hologram-modal-artwork");
@@ -115,7 +109,6 @@ const artworkCollectionStatus = document.getElementById("artwork-collection-stat
 const btnBuildAr = document.getElementById("btn-build-ar");
 const arBuildStatus = document.getElementById("ar-build-status");
 
-// Marker quality refs
 const markerQualityWrap = document.getElementById("marker-quality-wrap");
 const markerQualityImg = document.getElementById("marker-quality-img");
 const markerQualityCanvas = document.getElementById("marker-quality-canvas");
@@ -127,21 +120,13 @@ const markerQualityRating = document.getElementById("marker-quality-rating");
 const btnTestMarker = document.getElementById("btn-test-marker");
 const markerTestStatus = document.getElementById("marker-test-status");
 
-// Cached data for the moderator lists
 let cachedLeaderboard = [];
 let cachedNotes = [];
-// Date filter currently applied to each list: all | today | week | month | day
 let leaderboardDateRange = "all";
 let leaderboardDateDay = "";
 let notesDateRange = "all";
 let notesDateDay = "";
 
-// -------------------------------------------------------------------
-// Release info + update check
-// APP_VERSION is shared with the museum app through asset-manifest.js. The
-// build number is the ?v= suffix admin.html asked this browser to load, so the
-// label always reflects the files that are actually running.
-// -------------------------------------------------------------------
 const ADMIN_RELEASE_VERSION = (typeof self !== "undefined" && self.APP_VERSION) || "1.0.0";
 
 function readAdminAssetBuild(scriptName) {
@@ -181,8 +166,6 @@ async function checkAdminUpdates() {
   btnCheckAdminUpdates.disabled = true;
   setAdminUpdateStatus("Checking the deployed build…");
   try {
-    // The service worker answers from cache, so ask for a cache-busted copy of
-    // the deployed page instead of trusting the local one.
     const response = await fetch(`./admin.html?_=${Date.now()}`, { cache: "no-store" });
     if (!response.ok) throw new Error(`status ${response.status}`);
     const html = await response.text();
@@ -234,7 +217,6 @@ if (btnLoadAdminUpdate) btnLoadAdminUpdate.addEventListener("click", loadAdminUp
 if (accountTabButton) {
   accountTabButton.addEventListener("click", () => {
     renderAdminVersion();
-    // One automatic check per session; the Check button always re-checks.
     if (!adminUpdateCheckDone) checkAdminUpdates();
   });
 }
@@ -245,20 +227,8 @@ if (window.location.search.indexOf("updated=") !== -1) {
   window.history.replaceState(null, "", window.location.pathname + window.location.hash);
 }
 
-// -------------------------------------------------------------------
-// Login - Firebase Email/Password Auth
-// Create this user in Firebase Console → Authentication → Users → Add user.
-// No password is stored in the source: it is typed at runtime and can be
-// changed from the Account tab (or by email reset) without touching the code.
-// -------------------------------------------------------------------
 const ADMIN_EMAIL = "jdconstantino5281@gmail.com";
 
-// reCAPTCHA v3 check that runs before the password is sent to Firebase. The
-// score is judged inside the recaptcha-verify edge function, so the secret
-// never reaches this page (see recaptcha.js and SECURITY.md). A real verdict
-// (low score / rejected token) stops the sign-in; an unreachable verifier does
-// not, because Firebase still checks the password and a server outage must not
-// brick the admin panel.
 async function verifyAdminLoginChallenge() {
   const recaptcha = window.GBRRecaptcha;
   if (!recaptcha) {
@@ -279,8 +249,6 @@ async function verifyAdminLoginChallenge() {
   if (adminLoginStatus) adminLoginStatus.classList.add("hidden");
 }
 
-// Maps the error codes thrown by recaptcha.js onto messages the sign-in card
-// can show. These are the verdicts that block a sign-in.
 function describeRecaptchaError(err) {
   const code = err && err.code;
   if (code === "low-score") return "Security check failed: this browser was flagged as automated traffic.";
@@ -340,12 +308,6 @@ btnLogout.addEventListener("click", () => {
   if (accountEmail) accountEmail.textContent = "—";
 });
 
-// -------------------------------------------------------------------
-// Account — password management
-// The sign-in account lives in Firebase Authentication, so no password is
-// stored in the source. Staff can rotate it here; the change applies to every
-// device that signs in with this administrator account.
-// -------------------------------------------------------------------
 function setAccountStatus(message, state) {
   if (!accountPasswordStatus) return;
   accountPasswordStatus.textContent = message;
@@ -413,8 +375,6 @@ if (btnChangePassword) {
     btnChangePassword.disabled = true;
     setAccountStatus("Updating the password…");
     try {
-      // Firebase only accepts a password change right after a fresh sign-in,
-      // so prove the current password first and then rotate it.
       const credential = firebase.auth.EmailAuthProvider.credential(user.email || ADMIN_EMAIL, current);
       await user.reauthenticateWithCredential(credential);
       await user.updatePassword(next);
@@ -463,9 +423,6 @@ if (btnForgotPassword) {
   });
 }
 
-// -------------------------------------------------------------------
-// Install as desktop app
-// -------------------------------------------------------------------
 let adminAppInstalled = false;
 const adminStandaloneQuery = window.matchMedia("(display-mode: standalone)");
 const adminInstallButtons = [btnInstallAdmin, btnInstallAdminLogin].filter(Boolean);
@@ -516,9 +473,6 @@ if (adminStandaloneQuery.addEventListener) {
 }
 updateAdminInstallButtons();
 
-// -------------------------------------------------------------------
-// Tabs
-// -------------------------------------------------------------------
 const pageTitle = document.getElementById("page-title");
 tabButtons.forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -530,9 +484,6 @@ tabButtons.forEach((btn) => {
   });
 });
 
-// -------------------------------------------------------------------
-// Refresh
-// -------------------------------------------------------------------
 document.getElementById("btn-refresh-admin").addEventListener("click", loadAllData);
 
 async function loadAllData() {
@@ -544,9 +495,6 @@ async function loadAllData() {
   ]);
 }
 
-// =====================================================================
-// AI ASSISTANT POPUP MODAL
-// =====================================================================
 btnOpenAiModal.addEventListener("click", () => {
   aiPasteInput.value = "";
   updateAiCharCount();
@@ -560,30 +508,14 @@ btnAiCancel.addEventListener("click", () => {
   aiModal.classList.add("hidden");
 });
 
-// Groq's chat models take roughly 128k tokens of context, so a long reference
-// article is no trouble for the model itself: the old 4,000-character ceiling
-// came from the public chat widget's input sanitizer, which this form inherited
-// along with the textarea maxlength. Text up to AI_FILL_DIRECT_LIMIT now goes
-// out in a single request, and anything longer is condensed into factual notes
-// first, so a full article or data sheet still fills the form.
-//
-// The text is still sent as ONE user message. Splitting it into ~280-char turns
-// (as this used to) inflated the prompt and made the model treat the fragments
-// as separate requests, which is one reason it answered in prose instead of JSON.
 function buildAiMessages(text) {
   const clean = String(text || "").trim();
   return clean ? [{ role: "user", content: clean }] : [];
 }
 
-// A long reference document is trimmed locally rather than condensed by extra
-// model calls. The facts a catalog entry needs (names, dates, places, materials,
-// numbers) live in a minority of the sentences, so keeping the densest ones
-// carries the useful content while every extra request — and its share of the
-// per-minute rate limit — disappears.
 const AI_FILL_BOILERPLATE = /(cookie|subscribe|newsletter|sign in|log in|share this|read more|advertisement|all rights reserved|copyright|privacy policy|terms of use|photo(?:graph)? by|image (?:courtesy|credit)|click here|download the app|follow us)/i;
 const AI_FILL_FACT_TERMS = /(built|construct|erect|paint|sculpt|design|carv|cast|establish|found|commission|complet|restor|declar|designat|install|unveil|centur|architect|engineer|collection|museum|gallery|height|width|length|diameter|dimension|material|bronze|marble|timber|stone|concrete|steel|canvas|watercolou?r|fort|bridge|church|tower|monument|shrine|heritage|histor)/gi;
 
-// Rank one sentence by how much catalog-worthy information it carries.
 function scoreReferenceSentence(sentence) {
   let score = 0;
   if (/\d/.test(sentence)) score += 3;
@@ -596,8 +528,6 @@ function scoreReferenceSentence(sentence) {
   return score;
 }
 
-// Keep the opening paragraph (it names the item and its period) plus the
-// highest-scoring sentences in their original order, up to the budget.
 function condenseLocally(text, budget) {
   const sentences = [];
   const paragraphs = String(text || "")
@@ -615,8 +545,6 @@ function condenseLocally(text, budget) {
         text: sentence,
         order: sentences.length,
         para: paraIndex,
-        // Subscribe prompts, copyright lines, photo credits and the like never
-        // help a catalog entry, so they are not candidates at all.
         junk: AI_FILL_BOILERPLATE.test(sentence),
         score: scoreReferenceSentence(sentence) + (paraIndex === 0 ? 4 : 0),
       });
@@ -630,7 +558,6 @@ function condenseLocally(text, budget) {
     used += sentence.text.length + 1;
   };
 
-  // The lead paragraph always survives, so the item still has a name.
   for (const sentence of sentences) {
     if (sentence.para !== 0 || sentence.junk) continue;
     if (used + sentence.text.length > budget * 0.4) break;
@@ -647,8 +574,6 @@ function condenseLocally(text, budget) {
     if (used >= budget) break;
   }
 
-  // A page that is nearly all navigation and advertising leaves too little to
-  // work with, so fall back to that text rather than sending the model two lines.
   if (used < budget * 0.5) {
     for (const sentence of sentences) {
       if (keep.has(sentence.order)) continue;
@@ -664,15 +589,8 @@ function condenseLocally(text, budget) {
     .join(" ");
 }
 
-// The Groq proxy substitutes a chat-style apology whenever the model returns no
-// content, and the failure arrives as HTTP 200. These values drive the retry
-// ladder further down so one bad generation no longer kills the whole fill.
 const AI_FILL_MAX_TOKENS = 2600;
 const AI_FILL_ATTEMPTS = 3;
-// The older build answers in a lottery: the same request comes back complete,
-// cut in half, or as the chat apology, because its output budget is fixed and
-// shared with the model's own reasoning. Extra attempts are cheap (they stay well
-// inside the per-minute limit) and each one is another chance at a full answer.
 const AI_FILL_LEGACY_ATTEMPTS = 4;
 const AI_FILL_RETRY_DELAY = 700;
 
@@ -680,32 +598,16 @@ function aiFillAttemptBudget() {
   return aiFillProxyIsStale ? AI_FILL_LEGACY_ATTEMPTS : AI_FILL_ATTEMPTS;
 }
 
-// What to tell the admin when every attempt failed. On the older build the cause
-// is on the server, so say so instead of asking them to try the same thing again.
 function aiFillFailureMessage(err) {
   const base = (err && err.message) || "Could not reach the AI. Check your connection and try again.";
   if (!aiFillProxyIsStale) return base;
   return `${base} The deployed groq-proxy function is an older build that keeps cutting answers off — redeploying it fixes this; details are in the browser console.`;
 }
 
-// Length budget for the pasted reference text. Anything up to
-// AI_FILL_DIRECT_LIMIT goes to the model untouched; longer text is trimmed to
-// AI_FILL_CONDENSED_BUDGET locally, so a whole article still fills the form in a
-// single request instead of a chain of them. AI_FILL_HARD_LIMIT matches
-// maxlength on the textarea in admin.html.
 const AI_FILL_DIRECT_LIMIT = 20000;
 const AI_FILL_CONDENSED_BUDGET = 19000;
 const AI_FILL_HARD_LIMIT = 60000;
 
-// An older deployment of groq-proxy is still live on some projects. That build
-// clamps every message at 4,000 characters, ignores the requested token budget
-// (it hard-codes 1,800 for JSON replies and 300 for chat), does not enforce
-// response_format, and answers with a chat apology when the model sends nothing
-// back. A 60-100 word description plus three quiz questions does not fit in its
-// budget, so the model runs out of room and the fill fails with "no usable
-// answer". Replies from that build carry no `model` field, which is how the page
-// recognises it: from then on it trims to what the old function accepts and asks
-// for a shorter answer, so the form still fills.
 const AI_FILL_LEGACY_TEXT_LIMIT = 3800;
 const AI_FILL_LEGACY_FLAG = "gbr_aiFillStaleProxy";
 let aiFillProxyIsStale = readAiFillStaleFlag();
@@ -714,8 +616,6 @@ function readAiFillStaleFlag() {
   try { return localStorage.getItem(AI_FILL_LEGACY_FLAG) === "1"; } catch (err) { return false; }
 }
 
-// Remember the finding across reloads so the next fill starts with the small
-// request instead of failing once to discover the same thing again.
 function setAiFillProxyStale(isStale) {
   if (aiFillProxyIsStale === isStale) return;
   aiFillProxyIsStale = isStale;
@@ -725,8 +625,6 @@ function setAiFillProxyStale(isStale) {
   } catch (err) {}
 }
 
-// Keep the character counter beside the textarea honest, and flag the point where
-// the text stops going out in one piece.
 function updateAiCharCount() {
   if (!aiCharCount) return;
   const length = aiPasteInput.value.length;
@@ -746,8 +644,6 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Turn whatever the model sent back into an object: bare JSON, fenced JSON,
-// JSON wrapped in prose, or JSON with trailing commas.
 function extractAiJson(text) {
   if (!text || typeof text !== "string") return null;
   let candidate = text.trim();
@@ -768,9 +664,6 @@ function extractAiJson(text) {
   }
 }
 
-// Fallback prompt for the retry attempts. The full prompt above is long, and a
-// model that already answered in prose tends to keep doing it; a shorter ask
-// with one worked example leaves more of the token budget for the JSON itself.
 const AI_FILL_PROMPT = `You are a museum cataloging assistant. The user pasted reference text about ONE collection item. If the text arrives as several consecutive user messages, treat them as one continuous reference. It may be a painting, sculpture, artifact, document, monument, heritage structure, historical site, or any other museum object. Extract catalog fields and return ONLY a valid JSON object with these exact keys: title, artist, year, location, description, quiz.
 
 CRITICAL RULES:
@@ -810,10 +703,6 @@ Rules:
 Example output:
 {"title":"The Starry Night","artist":"Vincent van Gogh","year":"1889","location":"MoMA, New York","description":"A swirling night sky over a village, painted in 1889 while Van Gogh was at an asylum in Saint-Remy-de-Provence. It is among the most recognized works in Western art.","quiz":[{"question":"Who painted The Starry Night?","options":["Vincent van Gogh","Claude Monet","Pablo Picasso","Leonardo da Vinci"],"correctIndex":0},{"question":"In which year was it painted?","options":["1889","1901","1750","1941"],"correctIndex":0},{"question":"Where is it permanently displayed?","options":["MoMA, New York","The Louvre, Paris","The Prado, Madrid","The Uffizi, Florence"],"correctIndex":0}]}`;
 
-// The older proxy build stops mid-answer when the model runs out of its fixed
-// output budget, which leaves JSON that simply never closes. Cutting back to the
-// last complete value and closing the open brackets keeps the fields that did
-// arrive instead of discarding a reply that already names the item.
 function repairAiJson(text) {
   let candidate = String(text || "").trim();
   const fenced = candidate.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -844,8 +733,6 @@ function repairAiJson(text) {
     return { open, inString, lastQuote };
   };
 
-  // A value that stopped mid-string is dropped, along with a key that never got
-  // a value; both would only add half a word to the form.
   const first = scan(candidate);
   if (first.inString) {
     if (first.lastQuote < 1) return null;
@@ -867,27 +754,16 @@ function repairAiJson(text) {
   }
 }
 
-// A recovered answer is only worth filling the form with when it names the item
-// and carries either a usable description or at least one complete question.
 function isUsableAiPartial(parsed) {
   if (!parsed || typeof parsed.title !== "string" || !parsed.title.trim()) return false;
   const description = typeof parsed.description === "string" ? parsed.description.trim() : "";
   return description.length >= 60 || sanitizeQuiz(parsed.quiz).length > 0;
 }
 
-// The prompt for the older proxy build, whose output budget is fixed at 1,800
-// tokens however much the page asks for, and which does not enforce JSON mode.
-// Length is the whole trick here: measured against the live function, this bare
-// schema returns a complete answer five times out of six, while the same request
-// carrying a worked example and prose rules is cut off or comes back empty nearly
-// every time. So it stays a schema and nothing else. Redeploy groq-proxy and the
-// page goes back to the full prompt, longer text, and a longer description.
 const AI_FILL_LEGACY_PROMPT = `Reply with one JSON object and nothing else, no markdown:
 {"title":string,"artist":string|null,"year":string|null,"location":string|null,"description":string,"quiz":[{"question":string,"options":[string,string,string,string],"correctIndex":number}]}
 The description must be exactly 2 sentences. The quiz must have exactly 3 questions answerable from the text, each with 4 short options.`;
 
-// The deployed proxy answers with a chat apology when the model sends nothing
-// back, so treat "no JSON at all" as an empty answer rather than a parse bug.
 function looksLikeNoAnswer(text) {
   return !text.includes("{") || /couldn't come up with an answer/i.test(text);
 }
@@ -912,28 +788,19 @@ async function requestAiFill(messages, systemPrompt, maxTokens) {
     const detail = payload && payload.error ? payload.error : `API returned ${res.status} ${res.statusText}`;
     console.error("[AI] API error:", res.status, payload);
     const retryAfter = Number(res.headers.get("retry-after"));
-    // A rate limit that lasts longer than a short pause is not worth sitting
-    // through: say so plainly instead of failing three times in a row.
     if (res.status === 429 && retryAfter > 20) {
       throw aiFillError(
         `The AI is rate limited right now. Wait about ${Math.ceil(retryAfter)} seconds, then try again.`,
         false,
       );
     }
-    // 429 and 5xx are worth another attempt; a bad request or bad key is not.
     const err = aiFillError(detail, res.status === 429 || res.status >= 500);
     if (Number.isFinite(retryAfter) && retryAfter > 0) err.retryAfter = retryAfter;
     throw err;
   }
 
   const raw = String((payload && payload.content) || "").trim();
-  // Every current revision reports which model answered; a reply without it means
-  // the deployed function predates this page, so its 4,000-character cap and its
-  // fixed output budget are still in force. Remember that and answer with a
-  // smaller request instead of failing the same way on every attempt.
   const legacyProxy = !!payload && payload.model === undefined;
-  // A network failure gives no payload at all, which says nothing about the
-  // deployed build; only a real reply is allowed to change the finding.
   if (payload) setAiFillProxyStale(legacyProxy);
   if (legacyProxy) {
     console.warn("[AI] groq-proxy reply has no model field — the deployed function is an older build. Using a shorter request; redeploy groq-proxy for full-length fills.");
@@ -944,7 +811,6 @@ async function requestAiFill(messages, systemPrompt, maxTokens) {
   let parsed = extractAiJson(raw);
   let partial = false;
   if (!parsed) {
-    // A reply that stopped mid-JSON still holds the fields that arrived.
     const recovered = repairAiJson(raw);
     partial = !!recovered && isUsableAiPartial(recovered);
     if (partial) {
@@ -977,8 +843,6 @@ function applyAiFillResult(parsed) {
   const generatedQuiz = sanitizeQuiz(parsed.quiz);
   if (generatedQuiz.length > 0) renderQuizEditor(generatedQuiz);
 
-  // A cut-off answer is worth handing over, but it must not look like a clean
-  // one: say so and leave the dialog open so the fields get read before saving.
   if (parsed.__partial) {
     aiModalStatus.textContent = "⚠️ The AI answer was cut off. Filled from what arrived — please review the description and quiz before saving.";
     aiModalStatus.className = "ai-status error";
@@ -997,8 +861,6 @@ function applyAiFillResult(parsed) {
   return generatedQuiz.length;
 }
 
-// Trim a text to what one request may carry. A document with no sentence breaks
-// cannot be trimmed by sentence, so the plain character budget is the fallback.
 function fitAiTextForLimit(text, limit) {
   const value = String(text || "");
   if (value.length <= limit) return value;
@@ -1006,10 +868,6 @@ function fitAiTextForLimit(text, limit) {
   return condensed.length >= 200 ? condensed : value.slice(0, limit);
 }
 
-// Decide how the pasted text reaches the model: as-is for a normal article,
-// trimmed to its fact-dense sentences when it is longer than one request should
-// carry. Either way the fill costs a single request, so a long paste can no
-// longer exhaust the per-minute rate limit with retries on top.
 function prepareAiText(raw, onProgress) {
   const text = String(raw || "").trim();
   if (text.length > AI_FILL_HARD_LIMIT) {
@@ -1018,9 +876,6 @@ function prepareAiText(raw, onProgress) {
       false,
     );
   }
-  // The older function build cuts anything past 4,000 characters on the server,
-  // where the model cannot see the rest; trimming here keeps the fact-dense part
-  // of a long article instead of letting it be chopped mid-sentence.
   const limit = aiFillProxyIsStale ? AI_FILL_LEGACY_TEXT_LIMIT : AI_FILL_DIRECT_LIMIT;
   if (text.length <= limit) return text;
 
@@ -1032,22 +887,15 @@ function prepareAiText(raw, onProgress) {
   return fitAiTextForLimit(text, Math.min(limit, AI_FILL_CONDENSED_BUDGET));
 }
 
-// The prompt this page opens with: the full one when the deployed function is
-// current, the small one when we already know it is the older build.
 function aiFillPromptForAttempt() {
   return aiFillProxyIsStale ? AI_FILL_LEGACY_PROMPT : AI_FILL_PROMPT;
 }
 
-// Attempts 2..N use the smaller retry prompt. The first attempt opens with the
-// full prompt — or straight to the bare schema once the deployed build is known
-// to be the older one — because it gives the best result when it is answered.
 async function aiFillWithRetries(preparedText, waitSeconds) {
   let lastError = null;
   let waitMs = waitSeconds > 0 ? Math.min(waitSeconds * 1000, 20000) : 0;
   for (let attempt = 2; attempt <= aiFillAttemptBudget(); attempt++) {
     const total = aiFillAttemptBudget();
-    // A 429 says how long to wait; retrying sooner only burns the remaining
-    // attempts against a budget that has not recovered yet.
     const delay = waitMs || AI_FILL_RETRY_DELAY * (attempt - 1);
     aiModalStatus.textContent = waitMs
       ? `Rate limited — retrying in ${Math.ceil(delay / 1000)}s…`
@@ -1055,9 +903,6 @@ async function aiFillWithRetries(preparedText, waitSeconds) {
     aiModalStatus.className = "ai-status";
     await sleep(delay);
     waitMs = 0;
-    // The reply to the first attempt already told us which build is deployed.
-    // The older one needs a shorter text and a smaller answer, so both are cut
-    // down here rather than sending something it cannot finish.
     const retryText = aiFillProxyIsStale
       ? fitAiTextForLimit(preparedText, AI_FILL_LEGACY_TEXT_LIMIT)
       : preparedText;
@@ -1086,8 +931,6 @@ btnAiSubmit.addEventListener("click", async () => {
   aiModalStatus.className = "ai-status";
   btnAiSubmit.disabled = true;
 
-  // A very long reference text is trimmed to its fact-dense sentences here, so
-  // the whole document still goes out as one request.
   let preparedText = query;
   try {
     preparedText = prepareAiText(query, (message) => {
@@ -1111,7 +954,6 @@ btnAiSubmit.addEventListener("click", async () => {
 
   } catch (err) {
     console.error("[AI] Attempt 1 failed:", err, err.raw ? err.raw.substring(0, 300) : "");
-    // Stop right away on errors a retry cannot fix (bad request, bad key).
     if (err.retryable === false) {
       aiModalStatus.textContent = err.message || "Unknown error. Check the browser console (F12) for details.";
       aiModalStatus.className = "ai-status error";
@@ -1131,19 +973,8 @@ btnAiSubmit.addEventListener("click", async () => {
   }
 });
 
-// =====================================================================
-// STATS
-// =====================================================================
 const STATS_DAY_MS = 24 * 60 * 60 * 1000;
-// Raw visits are kept for a little over a year so the "All Time" tab (which
-// draws twelve month bars) can never lose a month it is still showing. A year of
-// visits is only a few thousand tiny records, and the extras beyond that are
-// what the prune in loadVisitData() removes.
 const VISIT_RETENTION_DAYS = 400;
-// Presence is a heartbeat, not history: a device that has not pinged for eight
-// hours is treated as gone and its record is deleted by loadActiveNow(). Without
-// that prune the tree keeps one permanent node for every browser that ever
-// opened the app, and the device count can only ever go up.
 const PRESENCE_RETENTION_MS = 8 * 60 * 60 * 1000;
 let cachedVisitTimestamps = [];
 let visitDataError = false;
@@ -1206,11 +1037,6 @@ async function loadActiveNow() {
   }
 }
 
-// Every heartbeat older than PRESENCE_RETENTION_MS is deleted, so a device that
-// left the museum stops counting as a known visitor instead of lingering in the
-// tree for ever. Deleting is one multi-path PATCH (a single request whatever the
-// number of stale devices), and the cached device list is only trimmed after
-// Firebase confirms the write so the numbers on screen match the database.
 async function pruneStalePresence(entries, authParam, now) {
   const staleKeys = entries
     .filter(([, value]) => {
@@ -1272,11 +1098,6 @@ async function loadVisitData() {
     const res = await fetch(`${FIREBASE_URL}/analytics_visits.json${authParam}`);
     if (!res.ok) throw new Error(`analytics_visits: ${res.status} ${await res.text()}`);
     const data = await res.json();
-    // The chart above only ever draws twelve months of bars, so a full year of
-    // raw visits is kept and everything older is dropped. Pruning is a single
-    // multi-path PATCH (one request, whatever the number of stale records)
-    // instead of one DELETE per record, and the list is filtered before it is
-    // cached so the numbers on screen already match what is left in Firebase.
     const staleCutoff = Date.now() - VISIT_RETENTION_DAYS * STATS_DAY_MS;
     const visitTimestamp = (value) => Number(value && value.timestamp);
     const entries = data ? Object.entries(data) : [];
@@ -1285,8 +1106,6 @@ async function loadVisitData() {
       .map(([, value]) => visitTimestamp(value))
       .filter((t) => Number.isFinite(t) && t >= staleCutoff);
 
-    // A record with no usable timestamp is left alone: it cannot be placed on the
-    // chart, but it is not ours to throw away.
     const staleKeys = entries
       .filter(([, value]) => {
         const ts = visitTimestamp(value);
@@ -1329,9 +1148,6 @@ function renderAnalytics() {
   setStatText("stat-visits-today-note", yesterdayVisits === 0 ? "No visits yesterday" : `${yesterdayVisits} yesterday`);
   setStatText("stat-notes-note", recentNoteCount === 0 ? "No notes in the last 7 days" : `${recentNoteCount} added in the last 7 days`);
 
-  // When the newest completion and guestbook note were posted, straight from the
-  // Firebase timestamps, so staff can see at a glance whether the museum has had
-  // activity today without opening either list.
   const latestCompletion = cachedLeaderboardStats.reduce((latest, [, entry]) => Math.max(latest, entryTimestamp(entry)), 0);
   const latestNote = cachedNoteStats.reduce((latest, [, note]) => Math.max(latest, entryTimestamp(note)), 0);
   setStatText(
@@ -1531,12 +1347,6 @@ visitsFilter.addEventListener("click", (e) => {
   renderVisitsChart(currentVisitsRange);
 });
 
-// =====================================================================
-// DATE FILTERS FOR THE MODERATOR LISTS
-// Completions and guestbook notes both carry the moment they were created in a
-// `timestamp` field (milliseconds, written by the app when the record is
-// posted), so every filter below reads that one field and nothing else.
-// =====================================================================
 const LIST_DAY_MS = 24 * 60 * 60 * 1000;
 
 function entryTimestamp(entry) {
@@ -1635,9 +1445,6 @@ bindDateFilter(notesDateFilter, notesDateInput, (range, day) => {
   renderNotesList();
 });
 
-// =====================================================================
-// LEADERBOARD
-// =====================================================================
 async function loadAdminLeaderboard() {
   adminLeaderboardList.innerHTML = `<p class="leaderboard-status">Loading…</p>`;
   try {
@@ -1690,9 +1497,6 @@ function renderLeaderboardList() {
   attachDeleteHandlers();
 }
 
-// =====================================================================
-// NOTES
-// =====================================================================
 async function loadAdminNotes() {
   adminNotesList.innerHTML = `<p class="leaderboard-status">Loading…</p>`;
   try {
@@ -1824,9 +1628,6 @@ function renderNotesList() {
   attachNoteViewHandlers();
 }
 
-// =====================================================================
-// ARTWORKS
-// =====================================================================
 let uploadedArtworksCache = [];
 let artworkSettingsCache = {};
 let allArtworksCache = [];
@@ -1866,9 +1667,6 @@ function artworkThumb(art) {
   return art.imageUrl || art.image || "";
 }
 
-// ---------------------------------------------------------------------
-// Quiz builder
-// ---------------------------------------------------------------------
 let editingQuizOnly = false;
 let quizQuestionUid = 0;
 
@@ -1994,13 +1792,6 @@ function collectQuizFromEditor() {
   return quiz;
 }
 
-// =====================================================================
-// HOLOGRAM SIGNS (immersive view only)
-// Every artwork — built-in or uploaded — can carry up to three panels.
-// They live in artworkSettings/<id>/holograms, the same override record
-// the app already reads for quiz and scavenger-hunt settings, so built-in
-// pieces can be configured without duplicating their artwork records.
-// =====================================================================
 const MAX_HOLOGRAM_SIGNS = 3;
 let hologramEditingArtwork = null;
 
@@ -2008,8 +1799,6 @@ function sanitizeHologramText(value) {
   return String(value == null ? "" : value).replace(/\s+/g, " ").trim().slice(0, 280);
 }
 
-// A sign shows text, an image, or both. A record saved before this choice
-// existed is read from what it holds, so nothing has to be migrated.
 function sanitizeHologramMode(value, hasText, hasImage, fallback) {
   const stored = typeof value === "string" ? value.trim().toLowerCase() : "";
   if (stored === "text" || stored === "image" || stored === "both") return stored;
@@ -2030,8 +1819,6 @@ function sanitizeHolograms(raw) {
     })
     .filter(Boolean)
     .slice(0, MAX_HOLOGRAM_SIGNS);
-  // Signs are on by default: a record that lists signs but never stored an
-  // explicit false shows them, so saving the editor is all it takes.
   return { enabled: source.enabled !== false && signs.length > 0, signs };
 }
 
@@ -2054,8 +1841,6 @@ function hologramModeHint(mode) {
 function hologramSignMarkup(sign) {
   const imageUrl = sign.imageUrl || "";
   const text = sanitizeHologramText(sign.text);
-  // A brand-new card opens on "image and text" so both fields are in reach,
-  // while a saved sign keeps the choice stored with it.
   const mode = sanitizeHologramMode(sign.mode, !!text, !!imageUrl, "both");
   const options = Object.keys(HOLOGRAM_MODE_LABELS)
     .map((value) => `<option value="${value}"${value === mode ? " selected" : ""}>${escapeHtml(HOLOGRAM_MODE_LABELS[value])}</option>`)
@@ -2084,9 +1869,6 @@ function hologramSignMarkup(sign) {
     </div>`;
 }
 
-// The text and image fields only make sense for the mode that uses them, so the
-// card hides whichever half the admin just switched off. Nothing is cleared:
-// flipping back restores what was typed or uploaded.
 function updateHologramCardMode(card) {
   if (!card) return;
   const select = card.querySelector(".hologram-mode-select");
@@ -2123,7 +1905,6 @@ function addHologramSignCard() {
   if (!hologramModalList) return;
   if (hologramModalList.querySelectorAll(".hologram-card").length >= MAX_HOLOGRAM_SIGNS) return;
   hologramModalList.insertAdjacentHTML("beforeend", hologramSignMarkup({ text: "", imageUrl: "", mode: "both" }));
-  // Adding a panel is the intent to show it, so the switch follows along.
   if (hologramModalEnabled) hologramModalEnabled.checked = true;
   updateHologramEditorState();
 }
@@ -2381,7 +2162,6 @@ function startQuizEdit(art) {
   artworkDrawer.scrollTop = 0;
 }
 
-// Supabase client for direct uploads (using anon key)
 const SUPABASE_URL = "https://twkgioiyfjfkppzerdii.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_UxPFx1rFmy8g8CMaaqtQ1g_LuHnfvry";
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -2648,7 +2428,6 @@ document.addEventListener("keydown", (event) => {
   if (artworkDrawer.classList.contains("open")) resetArtworkForm();
 });
 
-// ---- Image upload handling ----
 let processedImageBase64 = null;
 
 imageUploadZone.addEventListener("click", () => artworkImageInput.click());
@@ -2811,7 +2590,6 @@ btnUploadArtwork.addEventListener("click", async () => {
       });
       if (!response.ok) throw new Error(`Quiz save failed (${response.status})`);
 
-      // The quiz lives on both the settings override and the artwork record.
       try {
         const artworkResponse = await fetch(`${FIREBASE_URL}/artworks/${encodeURIComponent(editingArtworkId)}.json?auth=${idToken}`, {
           method: "PATCH",
@@ -2984,7 +2762,6 @@ const artwork = {
     if (!user) throw new Error("Not authenticated");
     const idToken = await user.getIdToken();
 
-    // Use Firebase REST API directly (supports CORS with auth param)
     const response = await fetch(`${FIREBASE_URL}/artworks/${artworkId}.json?auth=${idToken}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -3021,7 +2798,6 @@ const artwork = {
 
 btnCancelArtworkEdit.addEventListener("click", resetArtworkForm);
 
-// ---- AR target compiler and versioned publisher ----
 async function fetchUploadedArtworks() {
   const response = await fetch(`${FIREBASE_URL}/artworks.json`);
   if (!response.ok) throw new Error(`Could not load artworks (${response.status})`);
@@ -3044,6 +2820,9 @@ async function loadCompilerImage(url) {
   return downscaleImage(image, 700);
 }
 
+// Dito pinupublish yung AR bundle: kinukuha lahat ng published at scannable na
+// art, pinagsasama yung mga target image, tapos ina-upload sa Supabase.
+// Pag nasa app ka at hindi gumagana yung scanner, dito mo unang tingnan.
 async function publishArBundle() {
   if (!window.MINDAR?.IMAGE?.Compiler) throw new Error("MindAR compiler is still loading. Try again in a moment.");
   const uploaded = await fetchUploadedArtworks();
@@ -3075,7 +2854,6 @@ async function publishArBundle() {
   const manifestFile = new File([JSON.stringify(manifest, null, 2)], "manifest.json", { type: "application/json" });
   const manifestUrl = await uploadSupabaseAsset(manifestFile, `bundles/${version}/manifest.json`);
 
-  // Publish via Firebase REST API directly (supports CORS with auth param)
   const user = firebase.auth().currentUser;
   if (!user) throw new Error("Not authenticated");
   const idToken = await user.getIdToken();
@@ -3106,13 +2884,6 @@ btnBuildAr.addEventListener("click", async () => {
   }
 });
 
-// =====================================================================
-// SHARED UTILITIES
-// =====================================================================
-// Every privileged request runs through this helper: Firebase rejects a request
-// with 401/403 when the browser is still holding an ID token that has since been
-// rotated or revoked, so a rejected call is retried once with a forced token
-// refresh. Without the retry a delete fails even though the rules are correct.
 async function adminAuthedFetch(path, init = {}) {
   const user = firebase.auth().currentUser;
   if (!user) throw new Error("you are signed out — sign in again, then retry");
@@ -3126,15 +2897,12 @@ async function adminAuthedFetch(path, init = {}) {
   return send(true);
 }
 
-// Turns whatever Firebase answered into a sentence that points at the real fix
-// instead of the blanket "make sure the rules are deployed" message.
 async function describeAdminWriteFailure(res) {
   const raw = await res.text().catch(() => "");
   let detail = raw;
   try {
     detail = JSON.parse(raw).error || raw;
   } catch (_err) {
-    /* plain-text body, e.g. "Permission denied" */
   }
   detail = String(detail || "").trim().slice(0, 160);
   if (res.status === 401 || res.status === 403) {
@@ -3143,9 +2911,6 @@ async function describeAdminWriteFailure(res) {
   return `Firebase answered ${res.status}${detail ? ` ${detail}` : ""}.`;
 }
 
-// Failures arrive in three shapes: a rejected fetch (offline/blocked), a Firebase
-// auth error when the token could not even be refreshed, or our own message built
-// from the HTTP status. Each one gets an instruction staff can follow.
 function describeRequestFailure(err) {
   const code = (err && err.code) || "";
   if (code.startsWith("auth/")) {

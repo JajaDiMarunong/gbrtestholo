@@ -1,18 +1,22 @@
-// =====================================================================
-// MUSEUM AR COLLECTION — Main App
-// Artworks are now loaded dynamically (built-in + Firebase uploads)
-// =====================================================================
+// ══════════════════════════════════════════════════════════════════════
+//  GBR MUSEUM — app.js
+//
+//  Ito yung buong app na hawak ng bisita: gallery, scanner, quiz,
+//  badges, library, chat, hologram, settings. Lahat nandito.
+//
+//  Bago ka mag-edit: hanapin mo muna yung section na gumagawa ng bagay na
+//  babaguhin mo, tapos i-test. Please lang.
+// ══════════════════════════════════════════════════════════════════════
+
+// Saan nakalagay yung artworks at settings sa Firebase.
+// Pag pinalitan mo to ng ibang database, mawawalan ng laman yung gallery.
 const FIREBASE_URL = "https://gbrmuseumtest-default-rtdb.asia-southeast1.firebasedatabase.app";
 const BACKGROUND_IMAGE = "./assets/background.jpg";
 const AR_BUNDLE_CACHE_KEY = "museum_ar_bundle_v1";
 
-// -------------------------------------------------------------------
-// Release info — shown in Settings so anyone can tell at a glance
-// whether the app on screen is the newest deployment. APP_VERSION is
-// shared with the admin console through asset-manifest.js; the build
-// number is read back from the ?v= suffix that index.html asked the
-// browser to load, so the label can never drift from the files.
-// -------------------------------------------------------------------
+// Version na lumalabas sa Settings. Galing sa asset-manifest.js.
+// Pag may binago ka sa app.js, taasan mo rin yung ?v= sa index.html at yung
+// APP_VERSION doon, kung hindi yung luma pa rin ang bubuksan ng phone.
 const RELEASE_VERSION = (typeof self !== "undefined" && self.APP_VERSION) || "1.0.0";
 
 function readAssetBuild(scriptName) {
@@ -29,21 +33,10 @@ function appVersionLabel(build) {
   return value ? `v${RELEASE_VERSION} · build ${value}` : `v${RELEASE_VERSION}`;
 }
 
-// A reload after "Update" arrives as ?updated=<timestamp>. Drop it again so the
-// address bar stays clean and shared links keep working.
 if (window.location.search.indexOf("updated=") !== -1) {
   window.history.replaceState(null, "", window.location.pathname + window.location.hash);
 }
 
-// -------------------------------------------------------------------
-// Browser menus
-// A visitor resting a thumb on a note, an artwork photo or a name tag must
-// not be offered the browser's own menu ("Open image in new tab", "Save
-// image as…", "Copy"). The stylesheet removes long-press selection and the
-// iOS callout sheet; this cancels the remaining `contextmenu` event
-// (right-click and desktop long-press) and image drags. Text fields keep
-// their native menu so pasting and password managers still work.
-// -------------------------------------------------------------------
 const NATIVE_MENU_TARGETS =
   "input, textarea, select, [contenteditable]:not([contenteditable='false'])";
 
@@ -70,17 +63,13 @@ document.addEventListener(
   { capture: true }
 );
 
-// -------------------------------------------------------------------
-// Artworks
-// No artwork records are bundled with the app: every one of them is uploaded
-// through the admin console and merged from Firebase in initArtworks().
-// -------------------------------------------------------------------
-// Mutable artworks array — populated by initArtworks()
+// Dito nakatira lahat ng artwork pagkatapos i-fetch galing Firebase.
+// Bawat item may unlocked / quizCompleted / quizBest — yun yung alam ng app
+// tungkol sa bisita sa session na to.
 let artworks = [];
 
-// =====================================================================
-// BADGES
-// =====================================================================
+// Mga badge. Kung magdadagdag ka dito, ilagay mo rin sa renderBadges at sa
+// mga check*Badge() sa baba, kung hindi hindi siya lalabas kahit makuha.
 const badges = {
   firstScan: {
     id: "firstScan",
@@ -143,24 +132,13 @@ function normalizeQuiz(raw) {
     .filter(Boolean);
 }
 
-// -------------------------------------------------------------------
-// Hologram signs (immersive mode only)
-// An artwork can carry up to three holographic panels. The record lives
-// with the artwork settings and is read only by the immersive scene, so
-// nothing changes on the normal screens.
-// -------------------------------------------------------------------
 const MAX_HOLOGRAM_SIGNS = 3;
-// The signs are on by default: Immersive Mode opens with them showing, and the
-// switch in the top bar only hides them for that visit.
 let hologramSignsVisible = true;
 
 function normalizeHologramText(value) {
   return String(value == null ? "" : value).replace(/\s+/g, " ").trim().slice(0, 280);
 }
 
-// A sign shows text, an image, or both. Records written before this choice
-// existed only carry the two fields, so the mode falls back to whatever the sign
-// actually holds.
 function normalizeHologramMode(value, hasText, hasImage) {
   const stored = typeof value === "string" ? value.trim().toLowerCase() : "";
   if (stored === "text" || stored === "image" || stored === "both") return stored;
@@ -180,8 +158,6 @@ function normalizeHolograms(raw) {
     })
     .filter(Boolean)
     .slice(0, MAX_HOLOGRAM_SIGNS);
-  // A record that carries signs is on unless it explicitly says otherwise, so a
-  // freshly configured artwork shows its holograms without a second switch.
   return { enabled: source.enabled !== false && signs.length > 0, signs };
 }
 
@@ -190,9 +166,6 @@ function artworkHasQuiz(art) {
 }
 
 function getQuizStatus(art) {
-  // Kept to a single word (plus a check when it is finished) so the pill stays
-  // narrow on the artwork cards instead of stretching across the image. The
-  // best score rides along in the tooltip instead of widening the pill.
   if (!artworkHasQuiz(art)) return { state: "none", label: "No quiz", title: "No quiz for this artwork" };
   if (art.quizCompleted) {
     const best = art.quizBest ? ` · best ${art.quizBest.correct}/${art.quizBest.total}` : "";
@@ -201,9 +174,6 @@ function getQuizStatus(art) {
   return { state: art.unlocked ? "pending" : "locked", label: "Quiz", title: "Quiz not taken yet" };
 }
 
-// -------------------------------------------------------------------
-// DOM references
-// -------------------------------------------------------------------
 const screenUsername = document.getElementById("screen-username");
 const usernameInput = document.getElementById("username-input");
 const btnUsernameSubmit = document.getElementById("btn-username-submit");
@@ -404,8 +374,6 @@ const btnImmersiveBack = document.getElementById("btn-immersive-back");
 const btnImmersive = document.getElementById("btn-immersive");
 const btnImmersiveSigns = document.getElementById("btn-immersive-signs");
 
-// Browsers decide whether an install prompt is available. Installed launches use
-// the manifest's standalone display mode, which removes browser chrome.
 const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 
@@ -416,7 +384,6 @@ function updateInstallUI() {
     return;
   }
 
-  // Android / PC: native prompt captured by early script in <head>
   if (window.deferredInstallPrompt && !isIOS) {
     btnInstallApp.textContent = "Install Museum App";
     btnInstallApp.classList.remove("hidden");
@@ -424,7 +391,6 @@ function updateInstallUI() {
     return;
   }
 
-  // iOS: native prompt is impossible — show manual help
   if (isIOS) {
     btnInstallApp.textContent = "How to Install";
     btnInstallApp.classList.remove("hidden");
@@ -453,25 +419,27 @@ window.addEventListener("appinstalled", () => {
   installAppHint.classList.add("hidden");
 });
 
-// Run now, and also re-run if the late event fires
 updateInstallUI();
 window.addEventListener('beforeinstallprompt', () => updateInstallUI());
 
-// -------------------------------------------------------------------
-// Username / session
-// -------------------------------------------------------------------
+// ══════════════════════════════════════════════════════════════════════
+//  SAVED PROGRESS  (yung "pag balik ko, wala na yung progress ko" na bug)
+// ══════════════════════════════════════════════════════════════════════
+// Yung record sa localStorage ANG official na record ng bisita, hindi yung
+// artworks array. Bakit? Kasi pwedeng maging EMPTY yung artworks — walang
+// internet, walang cache, o na-unpublish pansamantala yung art. Pag doon ka
+// kumuha ng data, mabubura yung visit na pinaghirapan niya.
+//
+// TANGINA WAG TATANGGALIN yung merge sa persistProgress(). Pag inalis mo
+// yun, bumabalik yung bug. Naka-lock yun ng test, wag ka na magmatigas.
 let currentUsername = null;
 let sessionStartTime = null;
 let finalElapsedSeconds = null;
 let leaderboardSubmitted = false;
 const PROGRESS_STORAGE_KEY = "museum_progress_v1";
 
-// The copy on the device is the record of the visit, so it is merged with what
-// this session knows rather than rebuilt from the artwork list. A relaunch can
-// hand back an empty catalog — no connection and nothing cached, or a piece an
-// admin unpublished for a while — and rebuilding from that list would erase the
-// visit the visitor already earned. Nothing here clears an entry, so a refused
-// write can only cost the newest change, never the visit.
+// Basahin yung record sa device. Kung basag o wala, null lang — wag
+// mag-throw, maraming phone ang nagba-block ng storage.
 function readStoredProgress() {
   try {
     const parsed = JSON.parse(localStorage.getItem(PROGRESS_STORAGE_KEY) || "null");
@@ -481,6 +449,8 @@ function readStoredProgress() {
   }
 }
 
+// Ito yung nagsasave. Panuntunan: MERGE lang, walang binubura.
+// Simulan sa kung ano na ang nasa device, tapos idagdag yung alam ng session.
 function persistProgress() {
   const stored = readStoredProgress();
   const unlocked = new Set(stored && Array.isArray(stored.unlocked) ? stored.unlocked : []);
@@ -489,8 +459,8 @@ function persistProgress() {
     if (art.unlocked) unlocked.add(art.id);
     if (art.quizCompleted) quizCompleted.add(art.id);
   });
-  // Best score per artwork, so a retake can show whether it improved. A newer
-  // run always replaces the score it beat; an older one only fills a gap.
+  // Best score bawat art. Bago ang mananalo; yung luma hindi binubura, para
+  // may pang-compare pag nag-retake siya.
   const quizBest = { ...(stored && stored.quizBest ? stored.quizBest : {}) };
   artworks.forEach((art) => {
     if (art.quizBest && Number.isFinite(art.quizBest.correct)) {
@@ -513,17 +483,20 @@ function persistProgress() {
     leaderboardSubmitted: leaderboardSubmitted || Boolean(stored && stored.leaderboardSubmitted)
   };
 
+  // Kung i-refuse ng phone yung write (private mode, punong storage, blocked)
+  // huwag ipa-crash yung app. Nawala na lang yung pinakabagong galaw, hindi
+  // buong visit.
   try {
     localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progress));
     return true;
   } catch (error) {
-    // Storage refused (private mode, full quota, blocked storage). The visit
-    // keeps working; only the copy on the device is missing.
     console.warn("Could not save museum progress:", error);
     return false;
   }
 }
 
+// Ibalik sa artworks yung naka-save na visit. Yung mga art na wala sa catalog
+// ngayon, nasa record pa rin — babalik sila pag bumalik yung catalog.
 function restoreProgress() {
   const progress = readStoredProgress();
   if (!progress) return false;
@@ -549,31 +522,26 @@ function restoreProgress() {
   return true;
 }
 
-// An installed iOS app is suspended and killed without running `unload`, so the
-// record is written whenever the page is hidden as well as after every action.
-// Doing it here is free: persistProgress() only ever merges.
+// Sinasave tuwing naka-background na yung page. Ito yung sagot sa iPhone:
+// pinapatay ng iOS yung naka-suspend na app at hindi tumatakbo yung unload.
+// Mura lang to kasi merge lang naman, walang mabigat.
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") persistProgress();
 });
 window.addEventListener("pagehide", () => persistProgress());
 
-// Ask the browser to keep this origin out of eviction. Chrome grants silently to
-// a site that is actually used and Safari answers without a prompt; Firefox asks
-// the visitor first, which is not worth a modal inside the museum.
+// Pakiusapan yung browser na wag burahin yung storage namin pag nagkaka-space
+// issue. Skip sa Firefox — may prompt kasi doon at ayaw natin ng modal sa
+// gitna ng museum.
 if (navigator.storage && typeof navigator.storage.persist === "function" && !/firefox/i.test(navigator.userAgent)) {
   navigator.storage.persist().catch(() => {});
 }
 
-// A relaunch on a dead connection can leave the catalog empty: the visit is
-// still on the device, but there is nothing to hang it on. When the phone finds
-// a network again the catalog is fetched once more and the restored visit is
-// painted, so the visitor does not have to close and reopen the app.
 let catalogLoadPromise = null;
 let catalogReloadChain = Promise.resolve();
 
-// Boot and the reconnect handler share one load. Two overlapping loads finish in
-// whatever order the network decides, and the slower one would then put its
-// (possibly empty) list over the fresher one.
+// Isang load lang dapat ang tumatakbo. Pag dalawa, nauuna yung matapos —
+// at pwedeng yung walang laman pa yung mahuli, tapos mapapatungan yung bago.
 function loadArtworkCatalog() {
   if (!catalogLoadPromise) {
     catalogLoadPromise = initArtworks().then(
@@ -584,12 +552,13 @@ function loadArtworkCatalog() {
   return catalogLoadPromise;
 }
 
-// Attempts are queued instead of dropped, so a second `online` that arrives
-// while the first fetch is still running cannot swallow the retry.
+// Bumalik ang net? Load ulit yung catalog, i-restore yung visit, tapos
+// i-repaint yung gallery — para hindi na kailangan i-close at buksan pa yung
+// app. Nakapila yung attempts, kasi pag nauna natapos yung isa bago dumating
+// yung pangalawa, dapat hindi mawala yung retry.
 window.addEventListener("online", () => {
   catalogReloadChain = catalogReloadChain.then(async () => {
     if (artworks.length) return;
-    // Let a load that boot started finish, then try once more if it came back empty.
     if (catalogLoadPromise) {
       try { await catalogLoadPromise; } catch (_) {}
     }
@@ -608,13 +577,6 @@ window.addEventListener("online", () => {
   }).catch(() => {});
 });
 
-// -------------------------------------------------------------------
-// Duplicate display names
-// -------------------------------------------------------------------
-// A name is what a visitor is known by on the leaderboard and in the
-// guestbook, so two visitors should never share one. Both lists are read
-// when a name is entered; if it is taken the visitor is shown the next
-// free "Name(2), Name(3)…" and has to confirm it before it is used.
 const NAME_LENGTH_LIMIT = 20;
 const NAME_SUFFIX_PATTERN = /\s*\((\d+)\)$/;
 const NAME_LOOKUP_TIMEOUT_MS = 5000;
@@ -626,10 +588,6 @@ function normalizeUsername(value) {
   return String(value || "").trim().replace(/\s+/g, " ");
 }
 
-// Reads every name in use, skipping the visitor's own entries so that
-// changing the capitalisation of your own name is never a conflict.
-// Returns null when the lists cannot be read (offline, timeout), which the
-// caller treats as "no check possible" rather than blocking entry.
 async function fetchTakenNames() {
   const user = firebase.auth().currentUser;
   let authParam = "";
@@ -667,7 +625,6 @@ async function fetchTakenNames() {
     }
     return taken;
   } catch (err) {
-    // Offline museum visits still work; the name check simply never ran.
     console.warn("[Username] Could not read the existing names:", err);
     return null;
   } finally {
@@ -675,8 +632,6 @@ async function fetchTakenNames() {
   }
 }
 
-// "Nathan" -> "Nathan(2)" -> "Nathan(3)" … Names already typed with a
-// number keep counting from it, so "Nathan(2)" becomes "Nathan(3)".
 function nextAvailableName(desired, taken) {
   const trimmed = normalizeUsername(desired);
   const suffixMatch = trimmed.match(NAME_SUFFIX_PATTERN);
@@ -688,8 +643,6 @@ function nextAvailableName(desired, taken) {
   let n = suffixMatch ? Math.max(2, Number(suffixMatch[1]) + 1) : 2;
   while (n < 1000) {
     const suffix = `(${n})`;
-    // The input stops at 20 characters, so the root is shortened when the
-    // suffix would push the confirmed name past that budget.
     const allowedRoot = Math.max(1, NAME_LENGTH_LIMIT - suffix.length);
     const candidate = `${root.slice(0, allowedRoot).trimEnd()}${suffix}`;
     if (!isTaken(candidate)) return { name: candidate, conflict: true };
@@ -781,8 +734,6 @@ usernameStepConfirm.addEventListener("keydown", (e) => {
     btnUsernameCancel.click();
     return;
   }
-  // Enter on either button keeps its native click; the guard only swallows a
-  // stray Enter that lands on the card itself.
   if (e.key === "Enter" && !e.target.closest?.("button")) e.preventDefault();
 });
 
@@ -803,10 +754,6 @@ settingsReplayTutorial.addEventListener("click", () => {
   initTour();
 });
 
-// -------------------------------------------------------------------
-// Run timer — starts at the first unlock, freezes when the
-// leaderboard entry is submitted
-// -------------------------------------------------------------------
 function formatElapsedClock(totalSeconds) {
   const s = Math.max(0, Math.floor(totalSeconds));
   const hours = Math.floor(s / 3600);
@@ -853,9 +800,6 @@ function setBgLayerForScreen(isCameraScreen) {
   if (isCameraScreen) chatPanel.classList.add("hidden");
 }
 
-// -------------------------------------------------------------------
-// Bottom nav
-// -------------------------------------------------------------------
 navButtons.forEach((btn) => {
   btn.addEventListener("click", () => {
     const tab = btn.dataset.tab;
@@ -870,9 +814,6 @@ function setActiveNav(tab) {
   navButtons.forEach((btn) => btn.classList.toggle("active", btn.dataset.tab === tab));
 }
 
-// -------------------------------------------------------------------
-// Gallery filter state
-// -------------------------------------------------------------------
 let activeFilter = "all";
 
 filterButtons.forEach((btn) => {
@@ -900,9 +841,12 @@ function hideFilterToast() {
   filterToast.classList.add("hidden");
 }
 
-// -------------------------------------------------------------------
-// Gallery rendering
-// -------------------------------------------------------------------
+// ══════════════════════════════════════════════════════════════════════
+//  GALLERY / HOME
+// ══════════════════════════════════════════════════════════════════════
+
+// Buuin ulit lahat ng cards. Dito rin galing yung filter at yung progress bar,
+// kaya tawagin mo to pag may nabago sa artworks (unlock, filter, catalog reload).
 function renderGallery() {
   galleryGrid.innerHTML = "";
 
@@ -951,24 +895,16 @@ function renderGallery() {
   progressLabel.textContent = `${unlockedCount} / ${galleryArtworks.length} unlocked`;
 }
 
-// -------------------------------------------------------------------
-// Locked artworks
-// The scavenger hunt only hands out a piece once it has been scanned, so a
-// locked artwork is shown blurred in the gallery and in the low-data library,
-// and its write-up stays on the museum floor. Tapping one opens a small panel
-// with the same soft photo, enlarged, and the title — enough to recognise the
-// piece you are looking for without spoiling the story.
-// -------------------------------------------------------------------
 const LOCKED_LIBRARY_HINT = "Scan this artwork in the museum to unlock its story.";
 
-// Artworks kept out of the hunt can never be unlocked by scanning, so they stay
-// readable everywhere instead of being blurred forever.
 function isArtworkLocked(art) {
   if (!art || art.unlocked) return false;
   if (art.published === false || art.inScavengerHunt === false) return false;
   return true;
 }
 
+// Locked pa siya, so preview lang: picture at pangalan, walang details.
+// Para kahit papaano may dahilan siyang i-scan yung art sa pader.
 function openLockedPreview(art) {
   if (!art) return;
   lockedPreviewTitle.textContent = art.name;
@@ -976,8 +912,6 @@ function openLockedPreview(art) {
   lockedPreviewImage.style.display = "";
   lockedPreviewFallback.textContent = art.icon || "🖼️";
   lockedPreviewFallback.classList.add("hidden");
-  // The same fallback the cards use, so a photo that fails to load still leaves
-  // a titled panel instead of a blank rectangle.
   lockedPreviewImage.onerror = () => {
     lockedPreviewImage.style.display = "none";
     lockedPreviewFallback.classList.remove("hidden");
@@ -1001,20 +935,21 @@ lockedPreviewModal.addEventListener("click", (e) => {
   if (e.target === lockedPreviewModal) hideLockedPreview();
 });
 
-// -------------------------------------------------------------------
-// Screen switching
-// -------------------------------------------------------------------
+// ══════════════════════════════════════════════════════════════════════
+//  SCREEN NAVIGATION — isang screen lang ang nakikita at a time
+// ══════════════════════════════════════════════════════════════════════
 const NAV_TAB_ORDER = ["home", "scanner", "leaderboard"];
 let lastActiveNavTab = "home";
 
 function animateScreenIn(screenEl, animationClass) {
   screenEl.classList.remove("enter-left", "enter-right", "enter-top");
-  // Force reflow so the animation replays when switching between two
-  // screens that use the same class.
   void screenEl.offsetWidth;
   screenEl.classList.add(animationClass);
 }
 
+// Tinatago lahat, tapos 'yung tatawagin lang ang ipapakita. Isinasara rin
+// yung camera pag umaalis ka sa scanner — kung hindi, bukas pa rin yung cam
+// habang nasa quiz ka. Nakakahiya yun.
 function hideAllScreens() {
   const wasScannerVisible = !screenScanner.classList.contains("hidden");
   if (wasScannerVisible) {
@@ -1087,13 +1022,6 @@ function showLibrary() {
   setBgLayerForScreen(false);
 }
 
-// -------------------------------------------------------------------
-// App version + update check
-// The service worker answers from cache, so a deploy only reaches the
-// device after the caches are cleared. Settings shows the running build
-// and can fetch the deployed index.html (cache-busted) to say whether a
-// newer build is waiting.
-// -------------------------------------------------------------------
 const UPDATE_CHECK_TIMEOUT_MS = 8000;
 let appUpdateCheckDone = false;
 
@@ -1124,8 +1052,6 @@ function renderAppVersionInfo() {
   if (settingsVersionText) settingsVersionText.textContent = appVersionLabel();
 }
 
-// Answers the question Settings gets asked most on a phone ("did it save my
-// visit?"), and shows the counts stored on this device right now.
 function renderSavedProgress() {
   if (!settingsProgressText) return;
   const stored = readStoredProgress();
@@ -1206,8 +1132,6 @@ function showSettings() {
   settingsCurrentName.textContent = `Currently: ${currentUsername || "—"}`;
   renderAppVersionInfo();
   renderSavedProgress();
-  // One automatic check per page load keeps the status honest without asking
-  // the host every single time Settings is opened.
   if (!appUpdateCheckDone) checkForAppUpdates();
   screenSettings.classList.remove("hidden");
   bottomNav.classList.add("hidden");
@@ -1223,6 +1147,12 @@ btnOpenSettings.addEventListener("click", showSettings);
 btnSettingsBack.addEventListener("click", showHome);
 btnImmersiveBack.addEventListener("click", exitImmersive);
 
+// ══════════════════════════════════════════════════════════════════════
+//  UNLOCK MOMENT — modal + confetti
+// ══════════════════════════════════════════════════════════════════════
+
+// Unang scan = "Artwork Unlocked". Pag na-scan na dati, "Artwork Scanned"
+// na lang, para hindi maging OA yung celebration sa pangalawang beses.
 function showUnlockModal(art, wasAlreadyUnlocked) {
   modalTitle.textContent = art.name;
   modalDesc.textContent = art.details;
@@ -1237,6 +1167,8 @@ function showUnlockModal(art, wasAlreadyUnlocked) {
 }
 
 let confettiCleanupTimer = null;
+// Confetti sa canvas. Wag mong alisin yung cleanup timer sa dulo — pag
+// hindi natanggal, nagpapatong-patong yung animation at bumabagal yung phone.
 function triggerConfettiCelebration(options = {}) {
   const count = options.count || 105;
   const isDual = options.dual ?? true;
@@ -1244,17 +1176,17 @@ function triggerConfettiCelebration(options = {}) {
   clearTimeout(confettiCleanupTimer);
 
   const colors = [
-    "#c9a876", // Museum gold
-    "#f4d35e", // Bright gold
-    "#ffd700", // Gilt amber
-    "#6faa82", // Emerald sage
-    "#34d399", // Mint green
-    "#9fc6e0", // Gallery sky
-    "#38bdf8", // Vivid blue
-    "#f2a19b", // Warm coral
-    "#ef4444", // Festive ruby
-    "#f4f1ea", // Gallery pearl
-    "#ffffff", // Shimmer white
+    "#c9a876",
+    "#f4d35e",
+    "#ffd700",
+    "#6faa82",
+    "#34d399",
+    "#9fc6e0",
+    "#38bdf8",
+    "#f2a19b",
+    "#ef4444",
+    "#f4f1ea",
+    "#ffffff",
   ];
   const shapes = ["shape-ribbon", "shape-square", "shape-circle", "shape-diamond"];
 
@@ -1354,9 +1286,6 @@ unlockModal.addEventListener("click", (e) => {
   if (e.target === unlockModal) hideUnlockModal();
 });
 
-// -------------------------------------------------------------------
-// Badge celebratory modal + toast + awarding
-// -------------------------------------------------------------------
 function showBadgeUnlockModal(badge) {
   if (unlockModal && !unlockModal.classList.contains("hidden")) {
     if (!pendingBadgeUnlocks.some((b) => b.id === badge.id)) {
@@ -1408,14 +1337,15 @@ function showBadgeToast(badge) {
   badgeToastTimer = setTimeout(() => badgeToast.classList.add("hidden"), 2600);
 }
 
+// ══════════════════════════════════════════════════════════════════════
+//  BADGES — awardBadge() lang ang nagbibigay, tapos isinasave
+// ══════════════════════════════════════════════════════════════════════
 function awardBadge(key, options = {}) {
   const badge = badges[key];
   if (!badge || badge.earned) return;
   badge.earned = true;
   persistProgress();
   showBadgeToast(badge);
-  // The quiz result card is its own reward screen, so it defers the full-screen
-  // celebration instead of having the modal cover the score straight away.
   if (options.celebrate !== false) showBadgeUnlockModal(badge);
   checkAllBadgesBadge();
   if (allBadgesEarned()) updateNotesGate();
@@ -1461,14 +1391,9 @@ function renderBadges() {
     .join("");
 }
 
-// -------------------------------------------------------------------
-// Library
-// -------------------------------------------------------------------
 function renderLibrary() {
   libraryList.innerHTML = artworks.filter((art) => art.published !== false)
     .map((art) => {
-      // Locked pieces keep their photo in the list but softened, and their
-      // write-up is held back until the hunting visitor has scanned them.
       const locked = isArtworkLocked(art);
       return `
       <div class="library-card${locked ? " locked" : ""}" data-artwork-id="${art.id}">
@@ -1501,14 +1426,10 @@ function renderLibrary() {
   });
 }
 
-// Which artwork the library popup is showing, so its Learn More button knows what
-// to look up without re-reading the DOM.
 let libraryDetailArtId = null;
 
 function openLibraryDetail(art) {
   if (!art) return;
-  // A locked piece never reaches the full write-up: the preview panel shows the
-  // softened photo and the title instead.
   if (isArtworkLocked(art)) {
     openLockedPreview(art);
     return;
@@ -1532,26 +1453,14 @@ function openLibraryDetail(art) {
 }
 btnLibraryDetailClose.addEventListener("click", () => libraryDetailModal.classList.add("hidden"));
 
-// =====================================================================
-// KUYA DAVON — AI CHAT (via Edge Function proxy)
-// =====================================================================
 const GROQ_PROXY_URL = "https://twkgioiyfjfkppzerdii.functions.supabase.co/functions/v1/groq-proxy";
 
 const MUSEUM_NAME = "Geronimo Berenguer de los Reyes (GBR), Jr. Museum";
 const MUSEUM_LOCATION = "General Trias, Philippines";
 
-// The guide prompt travels with every question and Groq's free tier only allows a
-// few thousand tokens per minute. Sending the full write-up of all 21 artworks
-// (~14,100 characters, ~3,500 tokens) burned that budget in one message, so every
-// follow-up inside the same minute came back as "AI service unavailable". The
-// catalogue is therefore adaptive: the artworks the visitor is actually asking
-// about keep their long story, while the rest keep a short digest. Titles,
-// artists, years and locations are never trimmed, so comparisons still work.
 const ARTWORK_DETAIL_LIMIT = 3;
 const ARTWORK_DETAIL_CHARS = 900;
 const ARTWORK_DIGEST_CHARS = 110;
-// Only the tail of the conversation is replayed; older turns cost tokens without
-// adding much, and 20 of them could crowd out the collection itself.
 const CHAT_HISTORY_TURNS = 8;
 
 function normalizeChatText(value) {
@@ -1565,8 +1474,6 @@ function artworkMetaText(art) {
   const meta = [];
   if (art.artist) meta.push(`artist: ${art.artist}`);
   if (art.year) meta.push(`year: ${art.year}`);
-  // Almost every piece hangs in this same building, so repeating the museum
-  // address on 21 lines only burns tokens; the prompt already names the museum.
   const location = normalizeChatText(art.location);
   if (art.location && !location.includes("general trias")) meta.push(`location: ${art.location}`);
   return meta.length ? ` (${meta.join("; ")})` : "";
@@ -1595,8 +1502,6 @@ function scoreArtworkForQuery(art, query) {
 }
 
 function buildArtworkPromptList() {
-  // Unpublished records are hidden from the gallery, so the guide should not be
-  // talking about them either.
   const visible = artworks.filter((art) => art.published !== false);
   const query = normalizeChatText(
     chatHistory
@@ -1609,10 +1514,6 @@ function buildArtworkPromptList() {
     .filter((entry) => entry.score > 0)
     .sort((a, b) => b.score - a.score);
 
-  // One shared word ("portrait", "general") used to pull the full write-up of a
-  // few unrelated pieces along with the real answer. Only clear matches keep the
-  // long text; the single best match always does, so a loose question such as
-  // "tell me about the bridge" still gets a full answer.
   const topScore = ranked.length ? ranked[0].score : 0;
   let featuredMatches = ranked.filter((entry) => entry.score >= Math.max(6, topScore * 0.5));
   if (!featuredMatches.length && ranked.length) featuredMatches = [ranked[0]];
@@ -1627,6 +1528,13 @@ function buildArtworkPromptList() {
     .join("\n");
 }
 
+// ══════════════════════════════════════════════════════════════════════
+//  KUYA DAVON — AI museum guide (chat)
+// ══════════════════════════════════════════════════════════════════════
+// Yung prompt ni Kuya Davon. Wag mong galawin yung parteng "never name any
+// model" — paulit-ulit nang tinanong yan ng mga bisita at yun ang tamang
+// sagot. Pag may binago ka sa usapan, i-test mo talaga yung chat, hindi lang
+// i-check kung walang error.
 function buildKuyaDavonSystemPrompt() {
   const artworkList = buildArtworkPromptList();
 
@@ -1664,15 +1572,10 @@ ${artworkList}`;
 
 let chatHistory = [];
 
-// Small models still slip and answer "I'm Llama 3.3" when pressed. The prompt
-// forbids it; this is the belt-and-braces check so a model name can never reach
-// the bubble, even if the visitor insists or the model has a bad day.
 const GUIDE_IDENTITY_ANSWER =
   "I'm Kuya Davon, a model trained by JD Constantino based on data collected in this museum. Ask me about any of the artworks and I'll tell you its story!";
 const GUIDE_MODEL_MENTION =
   /\b(chat\s?gpt|openai|gpt[-\s]?[0-9]|gpt[-\s]?oss|llama|meta\s?ai|\bmeta\b|qwen|deepseek|mistral|mixtral|gemini|claude|anthropic|groq|grok|hugging\s?face|large language model|llm|transformer)\b/i;
-// Only considered a leak when the reply is talking about itself, so an artwork
-// described as having a 3D model is left alone.
 const GUIDE_SELF_TALK = /\b(i am|i'm|i’m|as an ai|trained|built|created|developed|powered|runs? on|model)\b/i;
 
 function keepGuideIdentity(reply) {
@@ -1811,8 +1714,6 @@ async function sendChatMessage() {
     });
 
     const responseText = await res.text();
-    // The proxy echoes the model it used. That name must never sit in the console
-    // where a screenshot can carry it out of the museum, so log only the shape.
     console.log("[Chat] Response status:", res.status, res.statusText, "bytes:", responseText.length);
 
     if (!res.ok) {
@@ -1846,8 +1747,6 @@ async function sendChatMessage() {
   } catch (err) {
     console.error("Kuya Davon chat error:", err);
     typingBubble.remove();
-    // A 429 means the AI answered too many questions in a minute, not that the
-    // museum is offline, so say that in plain words instead of the raw reason.
     const rateLimited = err && err.status === 429;
     addChatBubble(
       rateLimited
@@ -1865,16 +1764,11 @@ chatInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") sendChatMessage();
 });
 
-// -------------------------------------------------------------------
-// Artwork detail page
-// -------------------------------------------------------------------
 let currentDetailArtId = null;
 
 function openDetail(artworkId) {
   const art = artworks.find((a) => a.id === artworkId);
   if (!art) return;
-  // However the route was reached (gallery, quiz exit, immersive exit), a piece
-  // that has not been scanned never shows its write-up.
   if (isArtworkLocked(art)) {
     openLockedPreview(art);
     return;
@@ -1912,32 +1806,17 @@ function openDetail(artworkId) {
 
 btnDetailBack.addEventListener("click", showHome);
 
-// -------------------------------------------------------------------
-// Learn More
-// The brief itself is written in a Supabase function (Tavily search, then Groq
-// to rewrite the pages into plain language) because both keys have to stay off
-// the device. This side only decides when to ask, keeps a week of answers on the
-// phone so a return visit is instant, and paints whatever comes back.
-// -------------------------------------------------------------------
 const LEARN_PROXY_URL = "https://twkgioiyfjfkppzerdii.functions.supabase.co/functions/v1/learn-more";
 const LEARN_CACHE_KEY = "museum_learn_cache_v1";
 const LEARN_DEVICE_KEY = "museum_learn_device_v1";
-// Matches the function's own cache, so the phone and the server forget a brief at
-// roughly the same time instead of the app holding a stale one forever.
 const LEARN_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const LEARN_CACHE_LIMIT = 30;
-// The function gives up at ~30 s (search + up to 13 s of summarising), so the app
-// waits a little longer before blaming the network.
 const LEARN_TIMEOUT_MS = 34000;
 
 let learnArtId = null;
 let learnRequestSeq = 0;
 let learnController = null;
-// True between the tap and the answer, so a second tap cannot spend a second
-// search while the first is still running.
 let learnBusy = false;
-// Which piece the running lookup belongs to, so a tap on a different piece
-// replaces it instead of reusing an answer that is about to arrive for another.
 let learnPendingId = null;
 
 function getLearnDeviceId() {
@@ -1951,8 +1830,6 @@ function getLearnDeviceId() {
     }
     return id;
   } catch (_) {
-    // Private mode / storage disabled: the function simply sees no device id and
-    // falls back to its per-network limit.
     return "";
   }
 }
@@ -1980,14 +1857,12 @@ function saveLearnCache(artId, data) {
   try {
     const cache = readLearnCache();
     cache[artId] = { at: Date.now(), data };
-    // Keep the store small: localStorage is shared with the collection and the
-    // notepad, and Safari starts refusing writes when it fills up.
     const entries = Object.entries(cache)
       .filter(([, entry]) => entry && typeof entry === "object")
       .sort((a, b) => (Number(b[1].at) || 0) - (Number(a[1].at) || 0))
       .slice(0, LEARN_CACHE_LIMIT);
     localStorage.setItem(LEARN_CACHE_KEY, JSON.stringify(Object.fromEntries(entries)));
-  } catch (_) { /* storage full or blocked: the next open simply asks again */ }
+  } catch (_) {  }
 }
 
 function learnHostOf(url) {
@@ -2003,9 +1878,6 @@ function learnArtworkLine(art) {
   return meta ? `${art.name} — ${meta}` : art.name;
 }
 
-// The function already writes visitor-facing copy for the cases it understands
-// (credits used up, busy, no notes found), so its wording wins; the fallbacks
-// below only cover a network drop or an unparseable body.
 function learnErrorMessage(status, payload) {
   const serverMessage = payload && typeof payload.error === "string" ? payload.error.trim() : "";
   if (serverMessage) return serverMessage;
@@ -2040,8 +1912,6 @@ function showLearnResult(payload) {
   learnStatus.classList.remove("is-error");
   btnLearnRetry.classList.add("hidden");
 
-  // engine "sources" means the summariser could not run but the search still
-  // found pages — say so plainly instead of showing an empty card.
   learnSummary.textContent = summary ||
     "The search found pages about this piece, but no written brief yet. The links below are a good place to start.";
 
@@ -2114,7 +1984,7 @@ async function runLearnLookup(art) {
     let payload = null;
     try {
       payload = await res.json();
-    } catch (_) { /* function returned no JSON */ }
+    } catch (_) {  }
 
     if (seq !== learnRequestSeq) return;
 
@@ -2128,8 +1998,6 @@ async function runLearnLookup(art) {
     }
 
     showLearnResult(payload);
-    // Only a real brief is kept; the "sources only" answer is left uncached so the
-    // next open can still try for a written one.
     if (payload.summary) saveLearnCache(art.id, payload);
   } catch (err) {
     if (seq !== learnRequestSeq) return;
@@ -2143,8 +2011,6 @@ async function runLearnLookup(art) {
       : "Couldn't reach the web. Check your connection and try again.");
   } finally {
     clearTimeout(timer);
-    // Only the newest request may clear the busy flag: an aborted older one settles
-    // after its replacement has already started.
     if (learnController === controller) {
       learnController = null;
       learnBusy = false;
@@ -2166,24 +2032,17 @@ function openLearnForArtwork(artworkId) {
     showLearnResult(cached);
     return;
   }
-  // Reopening while the same piece is still being looked up should not spend a
-  // second search.
   if (learnBusy) {
     if (learnPendingId === art.id) {
       showLearnLoading(art);
       return;
     }
-    // A different piece: replace the running lookup rather than leave the card on
-    // a spinner that belongs to another artwork.
     runLearnLookup(art);
     return;
   }
   runLearnLookup(art);
 }
 
-// Closing cancels the request on purpose: the card is gone, so a late answer would
-// only be painted behind the visitor's back. The server keeps the answer cached for
-// the next open.
 function closeLearnModal() {
   learnModal.classList.add("hidden");
   learnRequestSeq++;
@@ -2209,32 +2068,25 @@ btnLearnRetry.addEventListener("click", () => {
   runLearnLookup(art);
 });
 learnModal.addEventListener("click", (event) => {
-  // The backdrop is the overlay itself; a tap on the card must not close it.
   if (event.target === learnModal) closeLearnModal();
 });
 learnModal.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeLearnModal();
 });
 
-// -------------------------------------------------------------------
-// Artwork quizzes
-// One question at a time, with a progress bar and a running score, then a
-// result card with the percentage and a per-question breakdown. Best scores
-// are kept in localStorage so a retake can show whether it improved.
-// -------------------------------------------------------------------
-const QUIZ_RING_CIRCUMFERENCE = 2 * Math.PI * 52; // result ring radius
+const QUIZ_RING_CIRCUMFERENCE = 2 * Math.PI * 52;
 const QUIZ_OPTION_KEYS = "ABCDEFGH";
 const QUIZ_BADGE_DELAY_MS = 700;
-// Answer options are dealt in a fresh order for every run. The seed mixes a
-// stable per-device id with the attempt counter, so two visitors sitting side by
-// side see different letters and a retake deals again.
 const QUIZ_SEED_KEY = "museum_quiz_seed_v1";
 const QUIZ_ORDER_SALT = 0x9e3779b1;
 
 let quizArtId = null;
 let quizIndex = 0;
-let quizAnswers = []; // { selected, correct } per answered question
-let quizOptionOrders = []; // question index -> stored option indexes in display order
+// ══════════════════════════════════════════════════════════════════════
+//  QUIZ
+// ══════════════════════════════════════════════════════════════════════
+let quizAnswers = [];
+let quizOptionOrders = [];
 let quizAttempt = 0;
 let quizRunId = 0;
 let quizBadgeTimer = null;
@@ -2251,8 +2103,6 @@ function quizOptionKey(index) {
   return QUIZ_OPTION_KEYS[index] || String(index + 1);
 }
 
-// Only the on-screen positions move; the saved quiz keeps its authored order, so
-// the admin builder and the stored record still read the way they were written.
 function getQuizSeed() {
   try {
     let seed = localStorage.getItem(QUIZ_SEED_KEY);
@@ -2264,8 +2114,6 @@ function getQuizSeed() {
     }
     return seed;
   } catch (_) {
-    // Private mode: nothing can be stored, but the attempt counter still keeps
-    // this run's order stable and different from the previous one.
     return "";
   }
 }
@@ -2278,21 +2126,20 @@ function shuffleQuizOptions(count, random) {
     order[i] = order[j];
     order[j] = swap;
   }
-  // Never hand back the authored order: that would leave the correct answer on the
-  // same letter for everybody, which is the pattern this shuffle exists to break.
   if (order.length > 1 && order.every((value, index) => value === index)) {
     order.push(order.shift());
   }
   return order;
 }
 
+// TANGINA WAG TATANGGALIN yung shuffle dito. Seeded yung order: pareho habang
+// isang attempt ka pa lang, pero iba sa susunod na take mo. Yung guard sa
+// baba ang humaharang sa "nag-shuffle nga ba?" na parehong-pareho pa rin.
 function buildQuizOptionOrders(art) {
   const seed = hashString(`quiz-order|${art.id}|${getQuizSeed()}|${quizAttempt}`) ^ QUIZ_ORDER_SALT;
   const random = mulberry32(seed);
   return art.quiz.map((question, index) => {
     const order = shuffleQuizOptions(question.options.length, random);
-    // A retake that happens to draw the same layout would look like the shuffle
-    // never ran, so nudge it one place when it matches the run before.
     const previous = quizOptionOrders[index];
     if (
       Array.isArray(previous) &&
@@ -2305,8 +2152,6 @@ function buildQuizOptionOrders(art) {
   });
 }
 
-// Falls back to the authored order when the record no longer matches the run (a
-// quiz edited while it was open), so a question can never lose an option.
 function quizOptionOrder(questionIndex) {
   const art = getQuizArtwork();
   const question = art && Array.isArray(art.quiz) ? art.quiz[questionIndex] : null;
@@ -2347,7 +2192,6 @@ function updateQuizScorePill(animate) {
   quizScore.classList.toggle("is-zero", correct === 0);
   quizScore.classList.remove("bump");
   if (animate) {
-    // Reflow so the pop replays on every new correct answer.
     void quizScore.offsetWidth;
     quizScore.classList.add("bump");
   }
@@ -2385,8 +2229,6 @@ function renderQuizQuestion() {
   btnQuizNext.textContent = quizIndex === art.quiz.length - 1 ? "See Results" : "Next Question";
 
   quizOptions.innerHTML = "";
-  // Options are painted in this run's shuffled order, and the letter keys follow
-  // the screen position, so A–D always read top to bottom.
   quizOptionOrder(quizIndex).forEach((optionIndex, displayIndex) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -2412,7 +2254,6 @@ function renderQuizQuestion() {
     quizOptions.appendChild(button);
   });
 
-  // Reset the scroll and let screen readers announce the new question.
   quizBody.scrollTop = 0;
   requestAnimationFrame(() => {
     quizQuestion.focus({ preventScroll: true });
@@ -2424,10 +2265,8 @@ function selectQuizAnswer(selectedIndex) {
   if (!art) return;
   const question = art.quiz[quizIndex];
   if (!question) return;
-  if (quizAnswers[quizIndex]) return; // already answered this question
+  if (quizAnswers[quizIndex]) return;
 
-  // The buttons follow the shuffled order, so the tapped position has to be
-  // mapped back to the option the quiz was written with before it is judged.
   const order = quizOptionOrder(quizIndex);
   const correctDisplayIndex = order.indexOf(question.correctIndex);
   const isCorrect = order[selectedIndex] === question.correctIndex;
@@ -2466,8 +2305,6 @@ function selectQuizAnswer(selectedIndex) {
     } catch (_) {}
   }
 
-  // Keep the Next button reachable on short screens without dumping the
-  // question off the top of the scroll area.
   const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
   btnQuizNext.scrollIntoView({ block: "nearest", behavior: reduceMotion ? "auto" : "smooth" });
 }
@@ -2485,12 +2322,14 @@ btnQuizNext.addEventListener("click", () => {
   finishQuiz(art);
 });
 
+// Dito nagsasave: quizCompleted + quizBest, tapos persistProgress() agad.
+// Kung may bagong badge, delay muna bago ipakita yung modal para hindi
+// sabay sa result screen — nakakalito pag dalawa ang pop-up.
 function finishQuiz(art) {
   const total = art.quiz.length;
   const correct = Math.min(countQuizCorrect(), total);
   const previousBest = art.quizBest || null;
   const wasCompleted = art.quizCompleted;
-  // Read before marking complete: the badge checks below look at this flag.
   const firstCompletionAnywhere = !artworks.some((a) => a.quizCompleted);
   const runId = quizRunId;
   const earnedBefore = new Set(Object.keys(badges).filter((key) => badges[key].earned));
@@ -2503,9 +2342,6 @@ function finishQuiz(art) {
 
   showQuizResult(art, correct, total, previousBest);
 
-  // Award straight away so the record is kept even if the visitor leaves, but
-  // hold the full-screen celebration back a beat: the result card is the first
-  // thing that should be read.
   if (!wasCompleted && firstCompletionAnywhere) awardBadge("firstQuiz", { celebrate: false });
   checkAllQuizzesBadge({ celebrate: false });
   const earnedNow = Object.keys(badges).filter((key) => badges[key].earned && !earnedBefore.has(key));
@@ -2514,7 +2350,6 @@ function finishQuiz(art) {
   clearTimeout(quizBadgeTimer);
   if (earnedNow.length > 0) {
     quizBadgeTimer = setTimeout(() => {
-      // If the visitor has already moved on, the chips and toast did the job.
       if (runId !== quizRunId) return;
       showBadgeUnlockModal(badges[earnedNow[earnedNow.length - 1]]);
     }, QUIZ_BADGE_DELAY_MS);
@@ -2532,8 +2367,6 @@ function showQuizResult(art, correct, total, previousBest) {
   quizResultEyebrow.textContent = `Quiz complete · ${art.name}`;
   quizResultScore.textContent = `${correct} of ${total} correct`;
 
-  // The top bar belongs to the whole screen, so retire the question counter
-  // once the result card is up and leave the bar full.
   quizProgress.textContent = "Quiz complete";
   quizProgressFill.style.width = "100%";
   quizProgressTrack.setAttribute("aria-valuenow", "100");
@@ -2544,7 +2377,6 @@ function showQuizResult(art, correct, total, previousBest) {
   else if (percent >= 40) title = "Good effort";
   quizResultTitle.textContent = title;
 
-  // Grow the ring from empty so the score is felt as well as read.
   quizResultRing.style.strokeDasharray = String(QUIZ_RING_CIRCUMFERENCE);
   quizResultRing.style.strokeDashoffset = String(QUIZ_RING_CIRCUMFERENCE);
   const offset = QUIZ_RING_CIRCUMFERENCE * (1 - (total ? correct / total : 0));
@@ -2604,7 +2436,6 @@ btnQuizBack.addEventListener("click", () => {
   const answered = quizAnswers.filter(Boolean).length;
   const halfway = art && answered > 0 && answered < art.quiz.length && quizResultView.classList.contains("hidden");
   if (halfway) {
-    // Answers only live in memory until the quiz is finished, so confirm first.
     quizLeaveConfirm.classList.remove("hidden");
     btnQuizStay.focus({ preventScroll: true });
     return;
@@ -2650,11 +2481,6 @@ btnTakeQuiz.addEventListener("click", () => {
 });
 
 
-// -------------------------------------------------------------------
-// Firebase: leaderboard
-// -------------------------------------------------------------------
-// Visitor-facing leaderboard is a "top 10" board; the admin panel still
-// shows every completion.
 const TOP_LEADERBOARD_LIMIT = 10;
 
 async function loadLeaderboard() {
@@ -2693,6 +2519,9 @@ async function loadLeaderboard() {
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════
+//  LEADERBOARD — time mo sa museum, isinusubmit kasama ng pangalan
+// ══════════════════════════════════════════════════════════════════════
 async function submitLeaderboardEntry(name, timeSeconds) {
   try {
     const user = firebase.auth().currentUser;
@@ -2704,31 +2533,23 @@ async function submitLeaderboardEntry(name, timeSeconds) {
       body: JSON.stringify({ name, time: timeSeconds, timestamp: Date.now(), deviceId: user.uid }),
     });
   } catch (err) {
-    /* silently ignore */
   }
 }
 
-// =====================================================================
-// GUESTBOOK BOARD
-// =====================================================================
 const NOTE_COLORS = ["#f4d35e", "#f2a19b", "#a8d5ba", "#9fc6e0", "#c9a8d8", "#f4f1ea"];
 const BOARD_WIDTH = 1200;
 const BOARD_HEIGHT = 800;
-// .note-sticky is 92x92 in style.css — keep the layout box in sync with it.
 const NOTE_W = 92;
 const NOTE_H = 92;
 const MIN_NOTE_GAP = 24;
 const NOTE_MARGIN = 36;
 const BOARD_PADDING = 30;
-const NOTES_BASE_ROWS = 6;      // rows kept on the board even when it is empty
-const NOTE_MAX_JITTER = 14;     // px a note may drift around its slot
-const NOTE_JITTER_SAFETY = 1;   // px kept free so slots never touch
-const NOTE_MAX_ROTATION = 8;    // degrees of "hand pinned" tilt
-// Notes never sit on top of each other's paper: the packed columns still leave a
-// real gap and the rows keep at least NOTE_MIN_ROW_GAP, which is what the ±8°
-// tilt needs so a corner only ever grazes a neighbour by a pixel or two.
+const NOTES_BASE_ROWS = 6;
+const NOTE_MAX_JITTER = 14;
+const NOTE_JITTER_SAFETY = 1;
+const NOTE_MAX_ROTATION = 8;
 const NOTE_MIN_ROW_GAP = 12;
-const BOARD_MAX_HEIGHT = 1100;  // past this the rows squeeze instead of growing
+const BOARD_MAX_HEIGHT = 1100;
 const LAYOUT_SEED = 0x6d2b79f5;
 let allNotesCache = [];
 let boardScale = 1;
@@ -2736,13 +2557,6 @@ let boardX = 0;
 let boardY = 0;
 let noteSlotOrderCache = { key: "", order: [] };
 
-// -------------------------------------------------------------------
-// Post-it scatter layout
-// -------------------------------------------------------------------
-// Notes drop into an invisible grid of slots so a note never lands on top of
-// an older one, then each one is nudged and tilted by a small seeded amount.
-// The seed comes from the note owner, so a note keeps its spot across
-// refreshes instead of dancing around.
 function hashString(value) {
   let hash = 0x811c9dc5;
   for (let i = 0; i < value.length; i++) {
@@ -2775,7 +2589,6 @@ function getNotesBoardGrid(noteCount) {
     Math.floor((usableWidth + MIN_NOTE_GAP) / (NOTE_W + MIN_NOTE_GAP))
   );
   const packedColumns = Math.max(roomyColumns, Math.floor(usableWidth / NOTE_W));
-  // Only take the tighter column count when it really saves a row.
   const roomyRows = Math.max(NOTES_BASE_ROWS, Math.ceil(count / roomyColumns));
   const packedRows = Math.max(NOTES_BASE_ROWS, Math.ceil(count / packedColumns));
   const columns = packedRows < roomyRows ? packedColumns : roomyColumns;
@@ -2830,8 +2643,6 @@ function getNoteSeed(note) {
 }
 
 function getNoteRotation(note, random) {
-  // The note editor already saves a random tilt — keep it so the phone and the
-  // TV show the same sheet of paper. Older notes get a seeded tilt instead.
   const saved = Number(note.rotation);
   if (Number.isFinite(saved) && Math.abs(saved) >= 1) {
     return clampNumber(saved, -NOTE_MAX_ROTATION, NOTE_MAX_ROTATION);
@@ -2840,8 +2651,6 @@ function getNoteRotation(note, random) {
   return tilt >= 0 ? Math.max(1.5, tilt) : Math.min(-1.5, tilt);
 }
 
-// How much wider/taller a tilted note becomes around its untilted box. This is
-// what decides how far a note may drift without covering a neighbour.
 function getNoteExpansion(rotation) {
   const radians = (Math.abs(rotation) * Math.PI) / 180;
   return {
@@ -2869,8 +2678,6 @@ function buildNotesLayout(notes) {
     const expansion = getNoteExpansion(rotation);
     const jitter = getNoteJitterLimit(rotation, grid);
 
-    // Keep the drift inside the note's own slot, so neighbouring notes can
-    // only ever graze their padding — never each other's text.
     const x = clampNumber(
       slot.x + (random() * 2 - 1) * jitter.x,
       expansion.x / 2,
@@ -2884,7 +2691,6 @@ function buildNotesLayout(notes) {
     return { x, y, rotation };
   });
 }
-// ---- end post-it scatter layout ----
 
 function fitNotesBoardToViewport() {
   const wrapW = notesBoardWrap.clientWidth;
@@ -2938,14 +2744,18 @@ function getMyNote() {
   return allNotesCache.find(isMyNote) || null;
 }
 
+// ══════════════════════════════════════════════════════════════════════
+//  GUESTBOOK BOARD — yung corkboard na may sticky notes
+// ══════════════════════════════════════════════════════════════════════
+// Yung layout ng notes deterministic: parehong seed, parehong pwesto. Wag mo
+// gawing random nang walang seed, nag-jujump kasi yung notes every refresh at
+// mukhang sira yung board.
 function renderNotesBoard() {
   notesBoard.innerHTML = "";
   const notesForDisplay = [...allNotesCache].sort(
     (a, b) => (a.timestamp || 0) - (b.timestamp || 0) || a.ownerId.localeCompare(b.ownerId)
   );
 
-  // Recompute the scatter every render: the per-note seed keeps each note in
-  // the same spot, so refreshing the board never reshuffles it.
   const layout = buildNotesLayout(notesForDisplay);
 
   notesForDisplay.forEach((note, index) => {
@@ -3005,7 +2815,6 @@ function updateNewNoteButton() {
   btnNewNote.textContent = myNote ? "✎ Edit My Note" : "+ New Note";
 }
 
-// ---- board pan + pinch-zoom ----
 let boardLastPinchDist = null;
 let boardLastTouchX = null;
 let boardLastTouchY = null;
@@ -3057,7 +2866,6 @@ notesBoardWrap.addEventListener(
   { passive: true }
 );
 
-// Mouse drag for desktop
 let mouseDragging = false;
 let mouseLastX = 0;
 let mouseLastY = 0;
@@ -3090,7 +2898,6 @@ btnBoardZoomOut.addEventListener("click", () => {
 });
 btnBoardZoomReset.addEventListener("click", fitNotesBoardToViewport);
 
-// ---- note editor ----
 let editingExistingNote = null;
 let drawCtx = null;
 
@@ -3166,9 +2973,6 @@ function setEditingMode(mode) {
 }
 noteTabs.forEach((tab) => tab.addEventListener("click", () => setEditingMode(tab.dataset.mode)));
 
-// -------------------------------------------------------------------
-// Photo notes: dedicated camera stream
-// -------------------------------------------------------------------
 let noteCameraStream = null;
 let noteCameraRequestToken = 0;
 
@@ -3363,7 +3167,6 @@ btnNotePost.addEventListener("click", async () => {
       body: JSON.stringify(note),
     });
   } catch (err) {
-    /* ignore */
   }
 
   btnNotePost.disabled = false;
@@ -3379,14 +3182,12 @@ btnNoteDelete.addEventListener("click", async () => {
     const idToken = await user.getIdToken();
     await fetch(`${FIREBASE_URL}/notes/${user.uid}.json?auth=${idToken}`, { method: "DELETE" }).catch(() => {});
   } catch (err) {
-    /* ignore */
   }
   stopPhotoPreview();
   noteEditorModal.classList.add("hidden");
   loadNotesBoard();
 });
 
-// ---- read-only view for someone else's note ----
 function openNoteView(note) {
   noteViewContent.style.background = note.type === "photo" ? "#f7f4ec" : note.color || NOTE_COLORS[0];
   if (note.type === "photo") {
@@ -3408,7 +3209,6 @@ function formatTime(seconds) {
   return m > 0 ? `${m}m ${r}s` : `${r}s`;
 }
 
-// Date without the time: the board note only has room for the day it was posted.
 function formatNoteDate(timestamp) {
   if (!timestamp) return "";
   const date = new Date(timestamp);
@@ -3428,9 +3228,6 @@ function getPinchDistance(touches) {
   return Math.hypot(dx, dy);
 }
 
-// =====================================================================
-// AR INITIALIZATION
-// =====================================================================
 function loadImage(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -3451,25 +3248,17 @@ function downscaleForCompile(img, maxDim = 700) {
   return canvas;
 }
 
-// -------------------------------------------------------------------
-// Gesture state: pinch-to-zoom + drag-to-rotate on the active target
-// -------------------------------------------------------------------
 let activeModelEl = null;
 let activeBaseScale = 0.06;
 let currentScale = 0.06;
 let currentRotY = 0;
 let currentRotX = 0;
 
-// -------------------------------------------------------------------
-// AR Lifecycle Management
-// -------------------------------------------------------------------
 let arScene = null;
 let arInitialized = false;
 let arScannable = [];
 
 function applyTransform() {
-  // Pinch/drag is ignored while the reveal is running so the two animations
-  // do not fight over the scale.
   if (!activeModelEl || isModelRevealing(activeModelEl)) return;
   activeModelEl.setAttribute("scale", `${currentScale} ${currentScale} ${currentScale}`);
   activeModelEl.setAttribute("rotation", `${currentRotX} ${currentRotY} 0`);
@@ -3498,8 +3287,6 @@ window.addEventListener(
   (e) => {
     if (screenScanner.classList.contains("hidden") || !activeModelEl) return;
     if (isModelRevealing(activeModelEl)) {
-      // Keep the gesture anchors fresh but ignore the movement: the reveal
-      // animation owns the transform until it finishes.
       if (e.touches.length === 2) lastPinchDistance = getPinchDistance(e.touches);
       else if (e.touches.length === 1) {
         lastTouchX = e.touches[0].clientX;
@@ -3541,9 +3328,6 @@ window.addEventListener(
   { passive: true }
 );
 
-// -------------------------------------------------------------------
-// Three.js Resource Disposal
-// -------------------------------------------------------------------
 function disposeModel(modelEl) {
   if (!modelEl) return;
   const mesh = modelEl.getObject3D("mesh");
@@ -3575,21 +3359,16 @@ function disposeMaterial(material) {
   material.dispose();
 }
 
-// -------------------------------------------------------------------
-// Model reveal: the 3D model rises and fades in instead of popping in
-// -------------------------------------------------------------------
-const MODEL_REVEAL_DURATION = 720;      // ms for the full rise
-const MODEL_REVEAL_LIFT_RATIO = 0.22;   // rise distance relative to the model scale
-const MODEL_REVEAL_LIFT_MAX = 0.2;      // cap so big models do not fly in from far away
-const MODEL_REVEAL_START_SCALE = 0.62;  // the model starts this small and grows into place
+const MODEL_REVEAL_DURATION = 720;
+const MODEL_REVEAL_LIFT_RATIO = 0.22;
+const MODEL_REVEAL_LIFT_MAX = 0.2;
+const MODEL_REVEAL_START_SCALE = 0.62;
 
-const modelReveals = new Map();            // modelEl -> { frame, materials }
-const pendingModelReveals = new WeakSet(); // entities still waiting for their mesh
-const deferredModelReveals = new Map();    // modelEl -> art, waiting for the unlock card to close
+const modelReveals = new Map();
+const pendingModelReveals = new WeakSet();
+const deferredModelReveals = new Map();
 let deferredModelRevealTimer = null;
 
-// The scan card is a full-screen overlay at 75% black, so anything revealed
-// underneath it is lost. Reveals wait for it to close instead.
 function arCardOpen() {
   return (
     !unlockModal.classList.contains("hidden") ||
@@ -3602,8 +3381,6 @@ function scheduleDeferredModelReveal() {
   deferredModelRevealTimer = setTimeout(() => {
     const modelEl = activeModelEl;
     if (!modelEl || !deferredModelReveals.has(modelEl)) return;
-    // A queued badge card can take over 320 ms after the scan card closes, so
-    // re-check whether the scanner is really visible again.
     if (arCardOpen()) return;
     const art = deferredModelReveals.get(modelEl);
     deferredModelReveals.delete(modelEl);
@@ -3637,8 +3414,6 @@ function restoreModelMaterials(reveal) {
 }
 
 function isModelRevealing(modelEl) {
-  // A queued reveal also owns the transform, otherwise a pinch during the scan
-  // card would be undone when the rise finally starts.
   return !!modelEl && (modelReveals.has(modelEl) || deferredModelReveals.has(modelEl));
 }
 
@@ -3664,15 +3439,9 @@ function beginModelReveal(modelEl, art) {
   const materials = collectModelMaterials(modelEl);
   const object3D = modelEl.object3D;
 
-  // Park the model at the start of the rise *before* showing it again so the
-  // first visible frame is already the small, low version instead of a
-  // full-size model popping into place.
   object3D.position.set(0, -lift, finalZ);
   object3D.scale.setScalar(startScale);
 
-  // The scan card covers the whole scanner, so a rise started now would play
-  // where nobody can see it. Keep the model parked and hidden, then let
-  // scheduleDeferredModelReveal() finish it once the card is dismissed.
   if (arCardOpen()) {
     deferredModelReveals.set(modelEl, art);
     modelEl.setAttribute("visible", "false");
@@ -3691,7 +3460,6 @@ function beginModelReveal(modelEl, art) {
   }
 
   if (!materials.length) {
-    // glTF/OBJ is still downloading — the rise starts from the model-loaded handler.
     pendingModelReveals.add(modelEl);
     return;
   }
@@ -3725,8 +3493,6 @@ function beginModelReveal(modelEl, art) {
       reveal.frame = requestAnimationFrame(step);
       return;
     }
-    // Land exactly on the configured transform and hand the materials back to
-    // their original transparent/opacity settings.
     object3D.position.set(0, 0, finalZ);
     object3D.scale.setScalar(finalScale);
     modelReveals.delete(modelEl);
@@ -3735,16 +3501,11 @@ function beginModelReveal(modelEl, art) {
   reveal.frame = requestAnimationFrame(step);
 }
 
-// -------------------------------------------------------------------
-// Target found / lost
-// -------------------------------------------------------------------
 function getOrCreateModelEntity(art, targetIndex, targetEl) {
   if (!art.modelObj) return null;
 
   let modelEl = document.getElementById(`model-${targetIndex}`);
   if (modelEl) {
-    // Visibility is handled by beginModelReveal() so the model never flashes at
-    // full size before the rise animation starts.
     return modelEl;
   }
 
@@ -3771,7 +3532,6 @@ function getOrCreateModelEntity(art, targetIndex, targetEl) {
     if (activeModelEl === modelEl) {
       scanHint.textContent = "Pinch to zoom · Drag to rotate";
     }
-    // The first reveal is parked until the mesh exists, so start it now.
     if (pendingModelReveals.has(modelEl)) beginModelReveal(modelEl, art);
   });
 
@@ -3815,8 +3575,6 @@ function handleTargetFound(art, targetIndex, targetEl) {
   showUnlockModal(art, wasAlreadyUnlocked);
   if (!wasAlreadyUnlocked) celebrateFirstUnlock();
 
-  // Queued only after the card is on screen: the reveal parks the model until
-  // the card closes so the rise is visible on the scanner, not behind the card.
   beginModelReveal(modelEl, art);
 
   if (firstTimeEver) awardBadge("firstScan");
@@ -3827,7 +3585,6 @@ function handleTargetLost(targetIndex) {
   scanHint.textContent = "Point your camera at an artwork";
   scanHint.classList.remove("found");
 
-  // Keep the model in memory to avoid costly re-fetching over slow/flaky signal; simply hide it
   const modelEl = document.getElementById(`model-${targetIndex}`);
   if (modelEl) {
     cancelModelReveal(modelEl);
@@ -3851,9 +3608,6 @@ function checkCollectionComplete() {
   }
 }
 
-// -------------------------------------------------------------------
-// Build AR scene
-// -------------------------------------------------------------------
 let cachedMindBlobUrl = null;
 let cachedMindBlobSrc = null;
 
@@ -3866,7 +3620,6 @@ async function resolveMindTargetBlobUrl(src) {
     return cachedMindBlobUrl;
   }
 
-  // 1. Try CacheStorage first (instant read from device cache/disk)
   if (window.caches) {
     try {
       const match = await caches.match(src);
@@ -3881,7 +3634,6 @@ async function resolveMindTargetBlobUrl(src) {
     } catch (_) {}
   }
 
-  // 2. Fast network fetch with 1200ms timeout
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 1200);
@@ -3902,9 +3654,14 @@ async function resolveMindTargetBlobUrl(src) {
   return src;
 }
 
+// ══════════════════════════════════════════════════════════════════════
+//  AR SCANNER — mind-ar, yung targets galing sa admin
+// ══════════════════════════════════════════════════════════════════════
+// Yung AR bundle (mga target image) pinupublish ng admin sa Supabase, tapos
+// naka-cache dito sa phone. Pag walang published bundle, sasabihin natin sa
+// bisita na kausapin yung staff — hindi natin papaikutin yung camera nang wala.
 async function initAR() {
   console.log("[initAR] Starting AR initialization");
-  // Each entry stays aligned with the target index compiled into the .mind file.
   let scannable = [];
   let imageTargetSrc = "";
   let targetCount = 0;
@@ -3919,9 +3676,6 @@ async function initAR() {
         if (art) mapped.push({ art, targetIndex: target.targetIndex });
         else console.warn("[initAR] Bundle target has no artwork record, skipping:", target.artworkId);
       });
-      // Older bundles still carry artworks that have since been removed. The
-      // remaining targets keep their compiled indices, so a stale entry only
-      // costs that one marker instead of the whole bundle.
       if (mapped.length) {
         scannable = mapped;
         imageTargetSrc = bundle.mindUrl;
@@ -3933,10 +3687,6 @@ async function initAR() {
     console.warn("Could not load published AR bundle:", error);
   }
 
-  // The app no longer bundles any artwork or compiled marker set, so the only
-  // scan targets are the ones an admin published from the console. Without that
-  // bundle MindAR has nothing to track: say so instead of opening a camera feed
-  // that can never match anything.
   if (!scannable.length || !imageTargetSrc) {
     loadingScreen.classList.add("hidden");
     scanHint.textContent = "No scan targets yet — ask the museum staff to publish the AR targets.";
@@ -3944,7 +3694,6 @@ async function initAR() {
     return;
   }
 
-  // Resolve target to an in-memory blob URL immediately (0ms network delay for MindAR)
   const targetBlobUrl = await resolveMindTargetBlobUrl(imageTargetSrc);
 
   const targetEntities = scannable
@@ -3990,8 +3739,6 @@ async function initAR() {
     hideLoading();
   });
 
-  // Fast failsafe: MindAR takes ~300-800ms to fire renderstart.
-  // If it takes longer than 2.5s on a weak device, hide loading overlay anyway so camera isn't obstructed
   setTimeout(hideLoading, 2500);
 
   scannable.forEach(({ art, targetIndex }) => {
@@ -4003,9 +3750,6 @@ async function initAR() {
   console.log("[initAR] AR initialization complete, waiting for renderstart...");
 }
 
-// -------------------------------------------------------------------
-// AR Lifecycle: start/stop
-// -------------------------------------------------------------------
 async function startAR() {
   if (arInitialized && arScene) {
     console.log("[startAR] AR already initialized, resuming");
@@ -4050,7 +3794,6 @@ async function loadPublishedArBundle() {
   try { savedManifest = JSON.parse(localStorage.getItem(AR_BUNDLE_CACHE_KEY) || "null"); } catch (_) {}
   let manifest = savedManifest;
 
-  // Fast check: if online, try fetching updated bundle metadata with a short 1000ms timeout
   if (navigator.onLine) {
     try {
       const controller = new AbortController();
@@ -4064,7 +3807,6 @@ async function loadPublishedArBundle() {
         }
       }
     } catch (_) {
-      // Network slow or timed out: fall back immediately to savedManifest without waiting
     }
   }
 
@@ -4074,14 +3816,12 @@ async function loadPublishedArBundle() {
   const candidateUrl = manifest.mindUrl;
   let response = null;
 
-  // 1. Check local cache FIRST (instant, no network roundtrip)
   if (cache) {
     try {
       response = await cache.match(candidateUrl);
     } catch (_) {}
   }
 
-  // 2. If not yet in cache and online, attempt fast network download (1800ms max)
   if (!response || !response.ok) {
     if (navigator.onLine) {
       try {
@@ -4097,7 +3837,6 @@ async function loadPublishedArBundle() {
     }
   }
 
-  // 3. Fall back to previous savedManifest mindUrl if candidate failed
   if ((!response || !response.ok) && savedManifest && savedManifest.mindUrl !== candidateUrl && cache) {
     try {
       response = await cache.match(savedManifest.mindUrl);
@@ -4112,14 +3851,12 @@ async function loadPublishedArBundle() {
   return manifest;
 }
 
-// =====================================================================
-// DYNAMIC ARTWORK LOADING (Firebase uploads)
-// =====================================================================
+// Yung catalog galing Firebase. Dalawang fetch: artworks, tapos yung
+// artworkSettings (overrides ng admin). Pag pumalya yung isa, tuloy pa rin —
+// sayang naman kung walang laman yung gallery dahil lang sa settings.
 async function initArtworks() {
-  // No records are bundled with the app; everything below comes from Firebase.
   let merged = [];
 
-  // Fetch uploaded artworks from Firebase
   try {
     const user = firebase.auth().currentUser;
     let authParam = "";
@@ -4174,8 +3911,6 @@ const uploaded = Object.entries(data).map(([key, val]) => ({
     console.warn("Could not load uploaded artworks from Firebase:", err);
   }
 
-  // Scavenger hunt inclusion, quizzes and holograms are stored separately so a
-  // record can be retuned without rewriting the whole artwork entry.
   try {
     const settingsRes = await fetch(`${FIREBASE_URL}/artworkSettings.json`);
     if (settingsRes.ok) {
@@ -4201,9 +3936,6 @@ const uploaded = Object.entries(data).map(([key, val]) => ({
   artworks = merged;
 }
 
-// =====================================================================
-// ANALYTICS: page visits + presence heartbeat
-// =====================================================================
 async function recordVisit() {
   const user = firebase.auth().currentUser;
   if (!user) return;
@@ -4215,7 +3947,6 @@ async function recordVisit() {
       body: JSON.stringify({ timestamp: Date.now() }),
     });
   } catch (err) {
-    /* silently ignore */
   }
 }
 
@@ -4230,7 +3961,6 @@ async function sendHeartbeat() {
       body: JSON.stringify({ timestamp: Date.now(), name: currentUsername || "Anonymous" }),
     });
   } catch (err) {
-    /* silently ignore */
   }
 }
 
@@ -4239,9 +3969,6 @@ function startPresenceHeartbeat() {
   setInterval(sendHeartbeat, 20000);
 }
 
-// =====================================================================
-// ONBOARDING TOUR
-// =====================================================================
 
 const TOUR_STEPS = [
   {
@@ -4291,6 +4018,9 @@ const TOUR_STEPS = [
 let currentTourStep = 0;
 let highlightedEl = null;
 
+// ══════════════════════════════════════════════════════════════════════
+//  TUTORIAL / TOUR — yung unang beses na pagbukas ng app
+// ══════════════════════════════════════════════════════════════════════
 function initTour() {
   if (localStorage.getItem("museum_tour_seen")) {
     showHome();
@@ -4298,7 +4028,6 @@ function initTour() {
     return;
   }
 
-  // Don't start the tour until the loading screen is finished
   if (!loadingScreen.classList.contains("hidden")) {
     setTimeout(initTour, 200);
     return;
@@ -4434,12 +4163,10 @@ function hideTour() {
   bottomNav.classList.remove("hidden");
 }
 
-// Tour controls
 document.getElementById("btn-tour-next").addEventListener("click", nextTourStep);
 document.getElementById("btn-tour-prev").addEventListener("click", prevTourStep);
 document.getElementById("btn-tour-skip").addEventListener("click", hideTour);
 
-// Swipe support
 (function initTourSwipe() {
   const overlay = document.getElementById("tour-overlay");
   let startX = 0;
@@ -4458,23 +4185,12 @@ document.getElementById("btn-tour-skip").addEventListener("click", hideTour);
   }, { passive: true });
 })();
 
-// Reposition on resize
 window.addEventListener("resize", () => {
   const overlay = document.getElementById("tour-overlay");
   if (overlay && !overlay.classList.contains("hidden")) {
     positionTourCard();
   }
 });
-// -------------------------------------------------------------------
-// Hologram sign visuals
-// A sign is painted into a canvas and used as the texture of a plane that
-// lives inside the same three.js scene as the skybox, so it keeps real
-// perspective, parallax and depth ordering instead of sitting on the
-// glass. Two planes share the texture: a crisp panel and an additive
-// copy behind it that bleeds light like a projector.
-// -------------------------------------------------------------------
-// The artwork is laid out in a 1024×512 space and rasterised at 1.5× that size,
-// so a panel that now fills most of the screen still shows crisp type.
 const HOLOGRAM_ART_WIDTH = 1024;
 const HOLOGRAM_ART_HEIGHT = 512;
 const HOLOGRAM_TEX_SCALE = 1.5;
@@ -4484,9 +4200,6 @@ const HOLOGRAM_FONT = "'Segoe UI', system-ui, -apple-system, sans-serif";
 const HOLOGRAM_PANEL_WIDTH = 1.5;
 const HOLOGRAM_PANEL_HEIGHT = 0.75;
 
-// Warm palette borrowed from the museum's own theme (--wall, --panel,
-// --frame-gold and --text in style.css), so a sign reads as a lit gallery
-// placard in the room instead of a cyan sticker pasted over it.
 const HOLOGRAM_PALETTE = {
   panelTop: "rgba(79, 60, 47, 0.92)",
   panelMid: "rgba(48, 38, 32, 0.9)",
@@ -4509,36 +4222,21 @@ const HOLOGRAM_PALETTE = {
   glowEmissive: "#4d3826",
 };
 
-// The camera sits at the visitor's eyes (y = 1.6) behind A-Frame's default lens,
-// which is 80° vertical (not three.js' 60°), so the horizontal field of view
-// follows the viewport aspect. A sign is sized from that lens alone — never from
-// how many signs there are — so adding a second or third sign leaves the first
-// one exactly as large.
 const HOLOGRAM_CAMERA_FOV = 80;
-// Slightly under eye height: the panel reads as a placard held a touch low
-// rather than a mask strapped across the visitor's view.
 const HOLOGRAM_ROW_Y = 1.54;
-const HOLOGRAM_ROW_DISTANCE = 0.8; // metres: arm's length, not across a room
-const HOLOGRAM_SIGN_FILL = 0.95; // share of the horizontal lens one sign takes
-const HOLOGRAM_SIGN_MAX_ANGLE = 84; // degrees: cap once the window is very wide
-const HOLOGRAM_SIGN_MIN_ANGLE = 26; // degrees: floor on a sliver-thin viewport
-const HOLOGRAM_SIGN_GAP = 4; // degrees of breathing room between neighbours
-// A sign can be dragged anywhere in the room, but never out of it. The shell
-// below keeps every panel at a readable distance, at a height the visitor can
-// look at, and inside a size that still fits on the glass, so a sign can never
-// be flung somewhere it cannot be brought back from.
-const HOLOGRAM_SIGN_MIN_RADIUS = 0.35; // metres from the visitor, horizontally
+const HOLOGRAM_ROW_DISTANCE = 0.8;
+const HOLOGRAM_SIGN_FILL = 0.95;
+const HOLOGRAM_SIGN_MAX_ANGLE = 84;
+const HOLOGRAM_SIGN_MIN_ANGLE = 26;
+const HOLOGRAM_SIGN_GAP = 4;
+const HOLOGRAM_SIGN_MIN_RADIUS = 0.35;
 const HOLOGRAM_SIGN_MAX_RADIUS = 4;
-const HOLOGRAM_SIGN_MIN_Y = 0.4; // metres above the floor
+const HOLOGRAM_SIGN_MIN_Y = 0.4;
 const HOLOGRAM_SIGN_MAX_Y = 2.9;
-const HOLOGRAM_SIGN_MIN_SCALE = 0.5; // × the size the layout picked for it
+const HOLOGRAM_SIGN_MIN_SCALE = 0.5;
 const HOLOGRAM_SIGN_MAX_SCALE = 2.2;
-const HOLOGRAM_DRAG_SLOP = 6; // pixels of travel before a touch counts as a drag
+const HOLOGRAM_DRAG_SLOP = 6;
 
-// Size the signs against the lens that actually renders them: the live camera's
-// vertical fov and the renderer canvas' aspect, not the window's. The default
-// A-Frame lens is 80°, not three.js' 60°, and reading it back means a resize or
-// a rotated phone can never leave the panels sized for the previous viewport.
 function hologramLens(sceneEl) {
   const scene = sceneEl || hologramMountScene;
   const camera = scene && scene.camera;
@@ -4560,22 +4258,15 @@ function hologramHorizontalFov(sceneEl) {
   return 2 * Math.atan(Math.tan((fov * Math.PI) / 360) * aspect);
 }
 
-// Width of one sign in degrees, identical whether it stands alone or in a row.
 function hologramSignAngle(sceneEl) {
   const fov = (hologramHorizontalFov(sceneEl) * 180) / Math.PI;
   return Math.min(Math.max(fov * HOLOGRAM_SIGN_FILL, HOLOGRAM_SIGN_MIN_ANGLE), HOLOGRAM_SIGN_MAX_ANGLE);
 }
 
-// One horizontal row, always: every sign shares a height, the same short
-// distance and the same size, and extra signs wrap around the visitor's
-// shoulders instead of shrinking. Turning your head brings the rest of the ring
-// into view, which is fine for a gyro-driven hologram.
 function hologramRowLayout(count, sceneEl) {
   const total = Math.max(1, Math.min(Number(count) || 1, MAX_HOLOGRAM_SIGNS));
   const distance = HOLOGRAM_ROW_DISTANCE;
   const angle = (hologramSignAngle(sceneEl) * Math.PI) / 180;
-  // Neighbours need at least one full panel between their centres or the two
-  // planes cross in mid-air, so the gap is added on top of the sign width.
   const step = angle + (HOLOGRAM_SIGN_GAP * Math.PI) / 180;
   const width = 2 * distance * Math.tan(angle / 2);
   const scale = width / HOLOGRAM_PANEL_WIDTH;
@@ -4608,12 +4299,6 @@ function hologramLayoutFor(count, sceneEl) {
 
 let hologramSignEntities = [];
 
-// What the visitor has done to each sign, as offsets from the spot the row
-// layout chose: an angle around them, a distance multiplier, a height and a
-// size multiplier. Keeping the intention rather than the raw coordinates is
-// what lets the row be rebuilt for a rotated phone without undoing the drag —
-// and it means every limit is applied in the same place, in applyOffset().
-// The record lives for one visit to Immersive Mode.
 const hologramSignOffsets = new Map();
 
 function hologramSignOffset(index) {
@@ -4665,9 +4350,6 @@ function hologramClipText(ctx, text, maxWidth) {
   return `${value}…`;
 }
 
-// Splits a note into as many lines as it needs at the column width. Words are
-// the unit, but a word wider than the column is broken on characters, so a
-// pasted address or a run-on cannot bleed past the frame either.
 function hologramWrapLines(ctx, text, maxWidth) {
   const words = String(text || "").split(/\s+/).filter(Boolean);
   const lines = [];
@@ -4703,11 +4385,6 @@ function hologramWrapLines(ctx, text, maxWidth) {
   return lines;
 }
 
-// The whole note has to fit. A fixed 44px body only ever had room for four
-// lines, so anything longer lost its tail to an ellipsis; instead the text is
-// set as large as it can be while every line still fits the column and the
-// block still fits the body area, down to a floor that stays readable on a
-// placard held at arm's length.
 function hologramFitBody(ctx, text, { maxWidth, maxHeight, maxFontSize, minFontSize, maxLines, lineRatio }) {
   const value = String(text || "").trim() || "Hologram";
   for (let size = maxFontSize; size >= minFontSize; size -= 1) {
@@ -4719,8 +4396,6 @@ function hologramFitBody(ctx, text, { maxWidth, maxHeight, maxFontSize, minFontS
       return { lines, fontSize: size, lineHeight };
     }
   }
-  // Even the floor is too big, so the note really is longer than the panel: keep
-  // every line that fits and mark the cut instead of dropping text silently.
   ctx.font = `600 ${minFontSize}px ${HOLOGRAM_FONT}`;
   const lineHeight = Math.max(minFontSize, Math.round(minFontSize * lineRatio));
   const all = hologramWrapLines(ctx, value, maxWidth);
@@ -4732,9 +4407,6 @@ function hologramFitBody(ctx, text, { maxWidth, maxHeight, maxFontSize, minFontS
   return { lines, fontSize: minFontSize, lineHeight };
 }
 
-// Sets the largest size at or below `maxSize` that keeps `text` inside
-// `maxWidth`, so a long artwork name shrinks in the footer instead of losing
-// its tail. Leaves ctx.font at the chosen size.
 function hologramFitFont(ctx, text, maxWidth, maxSize, minSize) {
   let size = maxSize;
   ctx.font = `600 ${size}px ${HOLOGRAM_FONT}`;
@@ -4745,9 +4417,6 @@ function hologramFitFont(ctx, text, maxWidth, maxSize, minSize) {
   return size;
 }
 
-// A sign is text only, an image only, or image and text together. "image" and
-// "both" need their content to exist, so a half-filled sign falls back to the
-// layout it can actually draw instead of rendering an empty panel.
 function resolveHologramSignLayout(mode, hasText, hasImage) {
   let layout = mode;
   if (layout !== "text" && layout !== "image" && layout !== "both") {
@@ -4759,6 +4428,12 @@ function resolveHologramSignLayout(mode, hasText, hasImage) {
   return layout;
 }
 
+// ══════════════════════════════════════════════════════════════════════
+//  HOLOGRAM SIGNS — 3D text/image na nakapatong sa art
+// ══════════════════════════════════════════════════════════════════════
+// Yung sign mismo ay canvas na dinodrowing tapos ginagawang texture. Mahal sa
+// CPU to, kaya iniingatan natin: isang canvas bawat sign, at hindi nagre-redraw
+// kung walang nagbago.
 function drawHologramSignCanvas({ title, text, image, mode, index, total, canvas: target }) {
   const canvas = target || document.createElement("canvas");
   if (canvas.width !== HOLOGRAM_TEX_WIDTH) canvas.width = HOLOGRAM_TEX_WIDTH;
@@ -4766,8 +4441,6 @@ function drawHologramSignCanvas({ title, text, image, mode, index, total, canvas
   const ctx = canvas.getContext("2d");
   if (!ctx) return canvas;
 
-  // Everything below is drawn in the 1024×512 art space and this transform does
-  // the upscaling, so no pixel size in here has to know the texture size.
   ctx.setTransform(HOLOGRAM_TEX_SCALE, 0, 0, HOLOGRAM_TEX_SCALE, 0, 0);
 
   const panelX = 20;
@@ -4789,9 +4462,6 @@ function drawHologramSignCanvas({ title, text, image, mode, index, total, canvas
   ctx.fillStyle = body;
   ctx.fill();
 
-  // Image-only sign: the photo is the placard, so it covers the panel edge to
-  // edge (cropped, never letterboxed) and the frame, brackets, labels and
-  // scanlines are painted on top of it. The note is left out entirely.
   if (imageOnly) {
     ctx.save();
     hologramRoundRect(ctx, panelX, panelY, panelW, panelH, radius);
@@ -4800,8 +4470,6 @@ function drawHologramSignCanvas({ title, text, image, mode, index, total, canvas
     const coverW = image.width * cover;
     const coverH = image.height * cover;
     ctx.drawImage(image, panelX + (panelW - coverW) / 2, panelY + (panelH - coverH) / 2, coverW, coverH);
-    // Soft veils at the top and bottom keep the corner label and the artwork
-    // title legible without dimming the middle of the picture.
     const veil = ctx.createLinearGradient(0, panelY, 0, panelY + panelH);
     veil.addColorStop(0, "rgba(24, 18, 15, 0.36)");
     veil.addColorStop(0.24, "rgba(24, 18, 15, 0)");
@@ -4812,7 +4480,6 @@ function drawHologramSignCanvas({ title, text, image, mode, index, total, canvas
     ctx.restore();
   }
 
-  // Halo drawn just outside the frame so the panel bleeds light.
   ctx.save();
   ctx.strokeStyle = HOLOGRAM_PALETTE.halo;
   ctx.lineWidth = 16;
@@ -4846,7 +4513,6 @@ function drawHologramSignCanvas({ title, text, image, mode, index, total, canvas
   ctx.font = `600 22px ${HOLOGRAM_FONT}`;
   ctx.fillStyle = HOLOGRAM_PALETTE.label;
   hologramLetterSpaced(ctx, "GBR JR. MUSEUM", 52, 84, 3);
-  // Just the count: "02 / 03" reads as a placard number, not a product name.
   ctx.fillStyle = HOLOGRAM_PALETTE.labelDim;
   hologramLetterSpaced(
     ctx,
@@ -4864,8 +4530,6 @@ function drawHologramSignCanvas({ title, text, image, mode, index, total, canvas
   ctx.lineTo(972, 110);
   ctx.stroke();
 
-  // "both" is the only layout that keeps the square thumbnail beside the note;
-  // an image-only sign already owns the whole panel by now.
   const hasImage = layout === "both";
   const textLeft = hasImage ? 372 : 52;
   const textRight = 972;
@@ -4891,12 +4555,7 @@ function drawHologramSignCanvas({ title, text, image, mode, index, total, canvas
     ctx.restore();
   }
 
-  // An image-only sign gives the whole body to its photo, so the note is only
-  // laid out when the sign carries text of its own.
   if (!imageOnly) {
-    // A long note shrinks to fit instead of losing its tail: the body is set as
-    // large as the column and the body area allow, so four short lines still get
-    // the big type and a full-length note still gets every word.
     const bodyTop = 140;
     const bodyBottom = 430;
     const fit = hologramFitBody(ctx, text || title || "Hologram", {
@@ -4909,9 +4568,6 @@ function drawHologramSignCanvas({ title, text, image, mode, index, total, canvas
     });
     ctx.font = `600 ${fit.fontSize}px ${HOLOGRAM_FONT}`;
     ctx.fillStyle = HOLOGRAM_PALETTE.body;
-    // Centre the block in the body area so a one-line sign does not float at
-    // the top of an otherwise empty panel, and centre each line inside the
-    // column so short and long notes share the same axis.
     const inkHeight = (fit.lines.length - 1) * fit.lineHeight + fit.fontSize;
     const firstBaseline = bodyTop + Math.max(0, (bodyBottom - bodyTop - inkHeight) / 2) + fit.fontSize * 0.8;
     const textCenter = (textLeft + textRight) / 2;
@@ -4919,7 +4575,6 @@ function drawHologramSignCanvas({ title, text, image, mode, index, total, canvas
     fit.lines.forEach((line, lineIndex) => {
       ctx.fillText(line, textCenter, firstBaseline + lineIndex * fit.lineHeight);
     });
-    // hologramLetterSpaced() places characters itself and assumes left alignment.
     ctx.textAlign = "left";
   }
 
@@ -4930,14 +4585,10 @@ function drawHologramSignCanvas({ title, text, image, mode, index, total, canvas
   ctx.lineTo(972, 444);
   ctx.stroke();
 
-  // Footer carries only the artwork title; the corner tag was removed. It starts
-  // inside the corner bracket so the two never overlap, and a long name shrinks
-  // to fit rather than losing its tail.
   ctx.fillStyle = HOLOGRAM_PALETTE.labelDim;
   hologramFitFont(ctx, title || "", 848, 20, 13);
   ctx.fillText(hologramClipText(ctx, title || "", 848), 80, 476);
 
-  // Scanlines and a top sheen, clipped to the frame.
   ctx.save();
   hologramRoundRect(ctx, panelX, panelY, panelW, panelH, radius);
   ctx.clip();
@@ -4966,8 +4617,6 @@ function loadHologramSignImageElement(url, crossOrigin) {
   });
 }
 
-// One fetch per URL: the 3D panel and the focused reader show the same photo,
-// and re-downloading it just to draw the second copy would stall the zoom-in.
 const hologramImageCache = new Map();
 
 async function loadHologramSignImage(url) {
@@ -4982,10 +4631,6 @@ async function loadHologramSignImage(url) {
 async function loadHologramSignImageSource(url) {
   if (!url) return null;
 
-  // Preferred path: fetch the bytes ourselves so the canvas stays untainted and
-  // the picture can be cropped and tinted like the rest of the panel. The blob
-  // URL is deliberately left alone (revoking it early is what stopped Safari
-  // from ever painting the photo into the texture).
   try {
     const response = await fetch(url, { credentials: "omit", mode: "cors" });
     if (!response.ok) throw new Error(`status ${response.status}`);
@@ -4995,7 +4640,6 @@ async function loadHologramSignImageSource(url) {
       try {
         await image.decode();
       } catch (_) {
-        /* decode() is advisory; the load event already gives us pixels. */
       }
     }
     return image;
@@ -5003,27 +4647,20 @@ async function loadHologramSignImageSource(url) {
     console.warn("[Hologram] Fetch for sign image failed, retrying as <img>:", error);
   }
 
-  // Supabase (or any host) may refuse the CORS fetch; a plain <img> often still
-  // works. A tainted canvas is fine here because the panel is only ever used as
-  // a WebGL texture, never read back.
   try {
     const image = await loadHologramSignImageElement(url, "anonymous");
     return image;
   } catch (_) {
-    /* fall through to the fully permissive attempt */
   }
 
   try {
     return await loadHologramSignImageElement(url, "");
   } catch (error) {
-    // A missing image only costs the picture: the text panel still renders.
     console.warn("[Hologram] Could not load sign image:", error);
     return null;
   }
 }
 
-// Repainting the shared canvas in place needs the GPU copy to be flagged, or the
-// panel keeps showing the text-only artwork it was created with.
 function refreshHologramCanvasTexture(el, canvas) {
   const component = el && el.components ? el.components.material : null;
   const material = component ? component.material : null;
@@ -5035,6 +4672,9 @@ function refreshHologramCanvasTexture(el, canvas) {
   if (el && canvas) el.setAttribute("material", "src", canvas);
 }
 
+// Yung A-Frame component na nagmamarka kung aling sign ang tinatapik mo.
+// Dito naka-hook yung hover at tap, kaya pag inalis mo to, wala nang
+// nagre-react yung mga hologram sa daliri ng bisita.
 function registerHologramSignComponent() {
   if (!window.AFRAME || window.AFRAME.components["hologram-sign"]) return;
 
@@ -5049,9 +4689,6 @@ function registerHologramSignComponent() {
     },
 
     init() {
-      // The spot the row layout picked is kept as the sign's "home": a drag is
-      // recorded as an offset from it, so a rotation can rebuild the row and
-      // still leave every panel where the visitor put it.
       const position = this.el.getAttribute("position") || {};
       const scale = this.el.getAttribute("scale") || {};
       this.homeX = Number.isFinite(position.x) ? position.x : 0;
@@ -5069,8 +4706,6 @@ function registerHologramSignComponent() {
       this.destroyed = false;
       this.imageRequest = 0;
 
-      // Both planes share one canvas that is repainted in place when the photo
-      // arrives, so the picture lands without swapping textures mid-flight.
       this.canvas = drawHologramSignCanvas({
         title: this.data.title,
         text: this.data.text,
@@ -5128,8 +4763,6 @@ function registerHologramSignComponent() {
       const request = (this.imageRequest += 1);
       const image = await loadHologramSignImage(url);
       if (!image || this.destroyed || request !== this.imageRequest) return;
-      // Kept on the component so the reader can reuse the decoded photo instead
-      // of asking the network for it a second time.
       this.loadedImage = image;
       drawHologramSignCanvas({
         title: this.data.title,
@@ -5146,9 +4779,6 @@ function registerHologramSignComponent() {
       this.glowMaterial = null;
     },
 
-    // Puts the panel back where the layout plus the visitor's dragging says it
-    // should be. Called on first render, and live while a drag or a pinch is in
-    // progress, so the plane follows the finger instead of the glass.
     applyOffset() {
       const object = this.el.object3D;
       if (!object) return;
@@ -5159,7 +4789,6 @@ function registerHologramSignComponent() {
       );
       const angle = this.homeAngle + offset.angle;
       const y = Math.min(HOLOGRAM_SIGN_MAX_Y, Math.max(HOLOGRAM_SIGN_MIN_Y, this.homeY + offset.dy));
-      // tick() owns the height because it adds the float, so hand it the rest.
       this.offsetY = y - this.homeY;
       object.position.set(radius * Math.sin(angle), y, -radius * Math.cos(angle));
       object.scale.setScalar(this.homeScale * offset.scale);
@@ -5174,8 +4803,6 @@ function registerHologramSignComponent() {
         this.applyOffset();
       }
 
-      // Yaw-only billboard: the panel always faces the visitor but stays
-      // upright, like a screen mounted on a floating arm.
       const camera = this.el.sceneEl && this.el.sceneEl.camera;
       if (camera) {
         const cameraMatrix = camera.matrixWorld.elements;
@@ -5195,8 +4822,6 @@ function registerHologramSignComponent() {
         this.glowMaterial = this.glowEl.components.material.material || null;
       }
 
-      // A slow shimmer plus the rare dropout is what separates a hologram
-      // from a printed panel.
       const dropout = Math.sin(time * 0.00047 + this.phase * 3.1) > 0.996 ? 0.4 : 1;
       const shimmer =
         0.92 + Math.sin(time * 0.005 + this.phase) * 0.05 + Math.sin(time * 0.016 + this.phase * 2) * 0.03;
@@ -5210,8 +4835,6 @@ function registerHologramSignComponent() {
   });
 }
 
-// Signs start switched on every time Immersive Mode opens, so a visitor never has
-// to hunt for the toggle. The switch still hides them for the rest of the visit.
 function applyHologramVisibility(visible) {
   hologramSignsVisible = visible !== false;
   const show = hologramSignsVisible;
@@ -5224,9 +4847,6 @@ function applyHologramVisibility(visible) {
   }
 }
 
-// A one-line nudge, shown for a few seconds the first time signs appear in a
-// visit. The panels look like something to read, not something to handle, so the
-// drag and the pinch have to be announced once and then get out of the way.
 const immersiveHint = document.getElementById("immersive-hint");
 const HOLOGRAM_HINT_TEXT = "Drag a sign to move it · Pinch to resize · Tap to read";
 const HOLOGRAM_HINT_MS = 5200;
@@ -5295,9 +4915,6 @@ function mountHologramSigns(art) {
   else sceneEl.addEventListener("loaded", build, { once: true });
 }
 
-// Rotating the phone, or dragging the window wider, changes the lens the signs
-// are sized against, so rebuild them once the horizontal field of view has moved
-// far enough to matter.
 let hologramResizeTimer = null;
 
 function remountHologramSigns() {
@@ -5327,19 +4944,12 @@ if (btnImmersiveSigns) {
   });
 }
 
-// -------------------------------------------------------------------
-// Focused sign reader
-// Tapping a floating panel lifts the same placard onto the screen as a
-// flat, crisp layer, so a long note can be read without squinting at a
-// plane held at arm's length. A gesture only counts as a tap when the
-// pointer barely travelled, so dragging to look around never opens one.
-// -------------------------------------------------------------------
 const holoReader = document.getElementById("holo-reader");
 const holoReaderCanvas = document.getElementById("holo-reader-canvas");
 const btnHoloReaderBack = document.getElementById("btn-holo-reader-back");
 
-const HOLOGRAM_TAP_SLOP = 12; // pixels of travel still counted as a tap
-const HOLOGRAM_TAP_MS = 900; // long enough for a deliberate touch, short enough to reject a hold
+const HOLOGRAM_TAP_SLOP = 12;
+const HOLOGRAM_TAP_MS = 900;
 
 let hologramReaderOpen = false;
 let hologramReaderSign = null;
@@ -5365,8 +4975,6 @@ function openHologramReader(sign) {
   hologramReaderOpen = true;
   drawHologramReaderCanvas(sign);
 
-  // The photo usually lands after the panel was built, so the text is painted
-  // immediately and the picture is swapped in once it has decoded.
   if (sign.imageUrl && !sign.image) {
     loadHologramSignImage(sign.imageUrl).then((image) => {
       if (!image || !hologramReaderOpen || hologramReaderSign !== sign) return;
@@ -5386,7 +4994,6 @@ function openHologramReader(sign) {
   }
 }
 
-// `immediate` skips the fade when Immersive Mode itself is being torn down.
 function closeHologramReader(immediate) {
   hologramReaderOpen = false;
   hologramReaderSign = null;
@@ -5395,16 +5002,13 @@ function closeHologramReader(immediate) {
   if (immediate) {
     holoReader.classList.add("no-transition");
     holoReader.classList.remove("is-open");
-    void holoReader.offsetWidth; // flush the jump, so the next open still animates
+    void holoReader.offsetWidth;
     holoReader.classList.remove("no-transition");
     return;
   }
   holoReader.classList.remove("is-open");
 }
 
-// Which sign, if any, sits under this point on the glass? The ray is built from
-// the live A-Frame camera, so it survives a resize or a turned head without any
-// bookkeeping of its own.
 function hologramSignAtPoint(clientX, clientY) {
   const AFRAME = window.AFRAME;
   const THREE = AFRAME && AFRAME.THREE;
@@ -5420,8 +5024,6 @@ function hologramSignAtPoint(clientX, clientY) {
   hologramSignEntities.forEach((entity) => {
     const component = entity.components && entity.components["hologram-sign"];
     const plane = component && component.panelEl;
-    // A-Frame leaves an entity's own object3D a Group and puts the renderable
-    // mesh in a child, so the ray has to be aimed at that child.
     const mesh = plane && (plane.getObject3D ? plane.getObject3D("mesh") : plane.object3D);
     if (mesh && mesh.isMesh) {
       meshes.push(mesh);
@@ -5444,25 +5046,14 @@ function hologramSignAtPoint(clientX, clientY) {
   return index >= 0 ? owners[index] : null;
 }
 
-// -------------------------------------------------------------------
-// Handling a sign: drag it around the room, pinch it bigger or smaller
-// A panel floats in the room, so a drag has to move it through the room rather
-// than across the glass: one pixel of fingertip travel is as many metres as the
-// panel's own depth makes it, which is what makes the panel feel held. Sideways
-// it sweeps around the visitor at its present distance, up and down it rides
-// world-up so it stays a standing placard and never tilts, and the yaw billboard
-// in tick() keeps it facing them the whole way.
-// -------------------------------------------------------------------
-let hologramDrag = null; // the panel one finger is moving
-let hologramPinch = null; // the panel two fingers are resizing
-const hologramPointers = new Map(); // pointerId → the finger's last position
+let hologramDrag = null;
+let hologramPinch = null;
+const hologramPointers = new Map();
 
 function hologramClamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-// Screen pixels → metres at a given depth, read from the live lens so a panel
-// tracks the finger the same way on any screen or window shape.
 function hologramMetersPerPixel(depth, sceneEl) {
   const { fov } = hologramLens(sceneEl);
   const canvas = sceneEl && sceneEl.canvas;
@@ -5482,8 +5073,6 @@ function hologramSignComponentAt(clientX, clientY) {
   return component || null;
 }
 
-// One finger: the panel follows it, then the offset it lands on is clamped into
-// the shell the visitor can always see and reach.
 function dragHologramSign(event) {
   const drag = hologramDrag;
   const sceneEl = hologramMountScene;
@@ -5502,16 +5091,12 @@ function dragHologramSign(event) {
   if (!object || !component) return;
 
   const cameraPosition = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
-  // A camera looks down its own -Z, so the forward axis is that column negated.
   const forward = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 2).negate();
   const depth = new THREE.Vector3(object.position.x, object.position.y, object.position.z)
     .sub(cameraPosition)
     .dot(forward);
   const perPixel = hologramMetersPerPixel(depth, sceneEl);
 
-  // Only the level part of the camera's right axis is used: with the phone
-  // tilted down at the floor, dragging sideways must still sweep the panel
-  // across the room instead of pushing it into the floor.
   const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
   right.y = 0;
   if (right.lengthSq() < 1e-8) right.set(1, 0, 0);
@@ -5535,8 +5120,6 @@ function dragHologramSign(event) {
   hideHologramHint();
 }
 
-// Two fingers: always a resize, never an open, and it ends whatever the first
-// finger had started so the panel cannot be dragged and scaled at once.
 function startHologramPinch() {
   const points = Array.from(hologramPointers.values());
   hologramTapStart = null;
@@ -5555,8 +5138,6 @@ function startHologramPinch() {
   hologramPinch = {
     component,
     startSpread: spread,
-    // Measured against the size the layout gave the panel, so the limits mean
-    // the same thing whether the visitor pinched a near sign or a far one.
     startScale: hologramSignOffset(component.data.index).scale,
   };
   hideHologramHint();
@@ -5582,7 +5163,6 @@ function hologramPointerDown(event) {
   if (event.pointerType === "mouse" && event.button !== 0) return;
 
   hologramPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
-  // A third finger is ignored rather than allowed to confuse the pinch.
   if (hologramPointers.size > 2) return;
 
   if (hologramPointers.size === 2) {
@@ -5603,13 +5183,10 @@ function hologramPointerDown(event) {
     y: event.clientY,
     moved: false,
   };
-  // Keep receiving moves when the finger wanders off the canvas: a drag that
-  // dies halfway is worse than one that never started.
   if (event.currentTarget && event.currentTarget.setPointerCapture) {
     try {
       event.currentTarget.setPointerCapture(event.pointerId);
     } catch (_) {
-      /* Already released or unsupported: moves still arrive while inside. */
     }
   }
   const canvas = hologramMountScene && hologramMountScene.canvas;
@@ -5630,9 +5207,7 @@ function hologramPointerUp(event) {
   }
 
   if (!start || hologramReaderOpen || start.id !== event.pointerId) return;
-  // A finger that moved was placing a panel, not asking to read one.
   if (drag && drag.moved) return;
-  // Another finger is still down, so this was part of a pinch.
   if (hologramPointers.size) return;
   const travel = Math.hypot(event.clientX - start.x, event.clientY - start.y);
   if (travel > HOLOGRAM_TAP_SLOP || Date.now() - start.time > HOLOGRAM_TAP_MS) return;
@@ -5650,8 +5225,6 @@ function hologramPointerUp(event) {
   });
 }
 
-// One finger either drags a panel or, for a mouse, hovers it. Two fingers resize,
-// and no gesture moves the camera any more: look-controls only follows the gyro.
 function hologramPointerMove(event) {
   const tracked = hologramPointers.get(event.pointerId);
   if (tracked) {
@@ -5670,10 +5243,7 @@ function hologramPointerMove(event) {
         event.clientX - hologramDrag.startX,
         event.clientY - hologramDrag.startY
       );
-      // The slop is a dead zone, so a tap that wobbles never shifts the panel.
       if (travel < HOLOGRAM_DRAG_SLOP) return;
-      // Start from where the finger is now, so the panel does not jump by the
-      // slop distance the moment the drag begins.
       hologramDrag.moved = true;
       hologramDrag.x = event.clientX;
       hologramDrag.y = event.clientY;
@@ -5683,9 +5253,6 @@ function hologramPointerMove(event) {
     return;
   }
 
-  // Desktop affordance: a panel under the mouse turns the pointer into a hand,
-  // which is the only hint the sign gives that it can be picked up. One raycast
-  // per animation frame, and none at all for touch.
   if (event.pointerType && event.pointerType !== "mouse") return;
   if (hologramHoverFrame) return;
   const { clientX, clientY } = event;
@@ -5701,8 +5268,6 @@ function hologramPointerMove(event) {
   });
 }
 
-// A cancelled pointer (the browser took over, the window lost focus) must not
-// leave a panel glued to a finger that no longer exists.
 function clearHologramHover(event) {
   hologramTapStart = null;
   if (event && event.pointerId !== undefined) {
@@ -5718,8 +5283,6 @@ function clearHologramHover(event) {
   if (canvas && !hologramDrag) canvas.style.cursor = "";
 }
 
-// Leaving the glass only matters when no finger is down; a captured drag keeps
-// delivering moves, so its cursor stays a grabbing hand.
 function hologramPointerLeave() {
   if (hologramPointers.size) return;
   const canvas = hologramMountScene && hologramMountScene.canvas;
@@ -5738,7 +5301,6 @@ if (btnHoloReaderBack) {
   btnHoloReaderBack.addEventListener("click", () => closeHologramReader());
 }
 if (holoReader) {
-  // A tap on the dimmed backdrop dismisses the sign too.
   holoReader.addEventListener("click", (event) => {
     if (event.target === holoReader) closeHologramReader();
   });
@@ -5753,11 +5315,7 @@ if (window.AFRAME) {
   window.addEventListener("load", registerHologramSignComponent, { once: true });
 }
 
-// -------------------------------------------------------------------
-// Immersive Mode (markerless skybox)
-// -------------------------------------------------------------------
 async function startImmersive(art) {
-  // iOS 13+ requires explicit permission for device orientation
   if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
     try {
       await DeviceOrientationEvent.requestPermission();
@@ -5773,9 +5331,6 @@ async function startImmersive(art) {
 
 immersiveContainer.innerHTML = `
     <a-scene embedded vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
-      <!-- Look-controls follows the phone's gyro only. Touch and mouse looking
-           are off, so a drag always belongs to a hologram sign instead of
-           spinning the camera away from it. -->
       <a-entity camera look-controls="touchEnabled: false; mouseEnabled: false; magicWindowTrackingEnabled: true" position="0 1.6 0"></a-entity>
       <a-entity gltf-model="${art.immersiveSkybox}" position="0 0 0" scale="100 100 100"></a-entity>
       <a-entity gltf-model="${art.modelObj}" animation-mixer="clip: ${art.animationClip || "*"}; loop: repeat" position="0 0 ${art.immersiveForward ?? -3}" rotation="${art.immersiveRotation || '0 0 0'}" scale="${art.immersiveScale || art.baseScale || 1} ${art.immersiveScale || art.baseScale || 1} ${art.immersiveScale || art.baseScale || 1}"></a-entity>
@@ -5784,8 +5339,6 @@ immersiveContainer.innerHTML = `
     </a-scene>
   `;
 
-  // Every visit starts with the signs showing, the signs on their layout spots
-  // and no sign left open from an earlier visit.
   hologramSignsVisible = true;
   resetHologramSignOffsets();
   resetHologramHint();
@@ -5815,14 +5368,6 @@ function exitImmersive() {
   if (currentDetailArtId !== null) openDetail(currentDetailArtId);
   else showHome();
 }
-// =====================================================================
-// BOOT
-// =====================================================================
-// reCAPTCHA v3 gate (recaptcha.js). The museum does not start — no visit is
-// recorded and the camera is not requested — until Google has scored this
-// browser and the recaptcha-verify function accepted the token. Tabs that
-// already passed skip the check for six hours; an offline tab fails open so
-// the museum still works without a connection.
 async function runEntryGate() {
   const recaptcha = window.GBRRecaptcha;
   if (!recaptcha) {
@@ -5832,6 +5377,12 @@ async function runEntryGate() {
   return recaptcha.runGate({ action: recaptcha.ACTIONS.ENTRY_GATE });
 }
 
+// ══════════════════════════════════════════════════════════════════════
+//  BOOT — ito yung unang tumatakbo pag binuksan yung app
+// ══════════════════════════════════════════════════════════════════════
+// TANGINA WAG TATANGGALIN yung restoreProgress() pagkatapos ng
+// loadArtworkCatalog(). Kailangan may artwork muna bago may ma-restore-han.
+// Pag binago mo yung order, sasabog yung saved progress.
 async function bootMuseum() {
   try {
     await runEntryGate();
@@ -5848,7 +5399,6 @@ async function bootMuseum() {
       });
     }
 
-    // Initialize Firebase Auth (anonymous)
     try {
       await firebase.auth().signInAnonymously();
       console.log("[Auth] Signed in anonymously as:", firebase.auth().currentUser?.uid);

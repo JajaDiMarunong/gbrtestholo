@@ -1,6 +1,7 @@
-/* Offline data cache, Firebase write queue, first-launch asset downloader, and the
-   page-shell touches both apps share: service worker registration and the guard
-   against the browser's pull-to-refresh gesture. */
+// Offline store: cache ng mga sagot galing Firebase, pila ng writes pag walang
+// net, at yung unang download ng assets para may laman agad kahit offline.
+// TANGINA WAG TATANGGALIN yung queue — dito dumadaan yung notes at leaderboard
+// na naipost habang walang signal. Pag inalis mo to, nawawala yung post nila.
 (function () {
   "use strict";
   const DB_NAME = "gbr-museum-offline";
@@ -66,8 +67,6 @@
 
   function isEphemeral(url) {
     const path = new URL(url, location.href).pathname;
-    // Presence and visit pings become meaningless while offline and would grow
-    // forever during a long disconnected session. Visitor-created content is queued.
     return path.startsWith("/presence/") || path.startsWith("/analytics_visits");
   }
 
@@ -112,7 +111,6 @@
   async function getAuthToken() {
     if (typeof firebase !== "undefined" && firebase.auth?.currentUser) {
       try {
-        // Pass false so it uses the cached token without forcing a network refresh
         const tokenPromise = firebase.auth().currentUser.getIdToken(false);
         const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Auth timeout")), 800));
         return await Promise.race([tokenPromise, timeoutPromise]);
@@ -142,6 +140,8 @@
     window.dispatchEvent(new CustomEvent("museum-offline-queued", { detail: entry }));
   }
 
+  // Isinusubmit ulit yung mga naipon habang offline. Pag pumalya, ibinabalik
+  // sa queue at susubukan ulit next time — walang nawawalang post.
   async function flushQueue() {
     if (!navigator.onLine) return;
     const entries = await allQueued();
@@ -165,7 +165,6 @@
     if (!firebaseUrl(url)) return nativeFetch(input, init);
 
     if (method === "GET") {
-      // 1. Instant offline check
       if (!navigator.onLine) {
         const offlineData = await cachedJson(url);
         if (offlineData !== undefined) {
@@ -176,11 +175,8 @@
         }
       }
 
-      // 2. Check local IndexedDB cache
       const cached = await cachedJson(url);
 
-      // 3. Fast timeout: If we already have cached data, don't stall the user!
-      // Only wait 1200ms for network; if slow or stalling, immediately return cached data.
       const timeoutMs = cached !== undefined ? 1200 : 3000;
 
       try {
@@ -219,6 +215,9 @@
     }
   };
 
+  // Hinahatak lahat ng asset sa asset-manifest para offline-ready agad yung
+  // app. Dahan-dahan to kaya may progress callback — ipakita mo sa bisita,
+  // kung hindi iisipin niyang nag-hang yung app.
   async function preloadAssets(onProgress) {
     const assets = Array.from(new Set(window.MUSEUM_ASSETS || []));
     if (!assets.length || !window.caches) return { completed: 0, total: 0, failed: 0 };
@@ -245,13 +244,6 @@
     return { completed, total: assets.length, failed };
   }
 
-  // Pulling the page down while it is already at the top is the browser's own
-  // reload gesture, and on this app it throws away the AR session, the scanner
-  // position, and anything typed but not saved yet. Chrome and Firefox can be told
-  // to leave it alone in CSS (style.css and admin.css set overscroll-behavior), but
-  // Safari ignores those rules, so cancel that one gesture here. Only a drag with
-  // nothing left to scroll is cancelled, so lists, drawers, and modals keep
-  // scrolling exactly as before.
   (function blockPullToRefresh() {
     let startY = null;
     const canScrollUp = (node) => {
