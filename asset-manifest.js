@@ -9,7 +9,7 @@
      4. Bump the ?v= suffix of any CSS file you edited.
    The build number shown on screen is read from the ?v= suffix the browser
    actually loaded, so it can never drift from the deployed files. */
-self.APP_VERSION = "1.10.7";
+self.APP_VERSION = "1.10.10";
 
 const MUSEUM_ASSETS = [
   "./", "./index.html", "./style.css", "./app.js", "./offline-store.js", "./manifest.webmanifest",
@@ -18,13 +18,6 @@ const MUSEUM_ASSETS = [
   "./assets/background.jpg", "./assets/logo.png", "./assets/icon-192.png",
   "./assets/icons/aichat.webp", "./assets/icons/arcamera.webp", "./assets/icons/artwork.webp",
   "./assets/icons/badge.webp", "./assets/icons/leaderboard.webp",
-  "./assets/crisanto-marker.jpg",
-  "./assets/mcarthurmarker.jpg",
-  "./assets/MarianoTriasMarker.png",
-  "./assets/targets.mind",
-  "./assets/crisantonew.glb", "./assets/mcarthur.optimized.glb", "./assets/MarianoTrias.glb",
-  "./assets/crisantoskybox.optimized.glb", "./assets/beachskybox.optimized.glb",
-  "./assets/MarianoTriasSkybox.glb",
   "https://aframe.io/releases/1.5.0/aframe.min.js",
   "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js",
   "https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.0.0/dist/aframe-extras.min.js"

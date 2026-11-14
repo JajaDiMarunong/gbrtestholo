@@ -6,72 +6,10 @@ const EDGE_FUNCTIONS_BASE = "https://twkgioiyfjfkppzerdii.functions.supabase.co/
 const GROQ_PROXY_URL = `${EDGE_FUNCTIONS_BASE}/groq-proxy`;
 
 // -------------------------------------------------------------------
-// Built-in artworks
+// Artworks
+// The collection lives entirely in Firebase, so the admin lists below only
+// ever hold uploads.
 // -------------------------------------------------------------------
-const BUILTIN_ARTWORKS = [
-  {
-    id: "builtin-crisanto",
-    name: "Portrait of Crisanto de los Reyes y Mendoza",
-    image: "./assets/crisanto-marker.jpg",
-    artist: "Rafael del Casal",
-    year: "Undated",
-    location: "GBR Jr. Museum, General Trias, Philippines",
-    details: "Portrait of Crisanto de los Reyes y Mendoza by Rafael del Casal.",
-    baseScale: 0.063,
-    icon: "🎨",
-    hasModel: true,
-    showInMainCollection: true,
-    scannable: true,
-    published: true,
-    inScavengerHunt: true,
-    markerImage: "./assets/crisanto-marker.jpg",
-  },
-{
-    id: "builtin-mcarthur",
-    name: "General Douglas MacArthur",
-    image: "./assets/mcarthurmarker.jpg",
-    artist: "GBR Jr. Museum Collection",
-    year: "20th Century",
-    location: "GBR Jr. Museum, General Trias, Philippines",
-    details: "General Douglas MacArthur (1880–1964) was a 5-star General of the Army and one of the most prominent military leaders in American history, best known for his command of Allied forces in the Southwest Pacific during World War II. Born on January 26, 1880, in Little Rock, Arkansas, and passing away on April 5, 1964, in Washington, D.C., MacArthur played a pivotal role in the history of the Philippines—first as Field Marshal of the Philippine Army and later as Supreme Commander of Allied Forces. After being forced to evacuate Corregidor in March 1942 under direct orders from President Franklin D. Roosevelt, he famously made his enduring personal pledge to the Filipino people at Terowie Railway Station in South Australia: \"I came through and I shall return.\" He fulfilled that promise two and a half years later on October 20, 1944, when he waded ashore at Red Beach in Palo, Leyte, declaring, \"People of the Philippines, I have returned!\"—a historic landing that initiated the liberation of the archipelago and cemented his legacy in Philippine history.",
-    baseScale: 1,
-    icon: "🎖️",
-    hasModel: true,
-    showInMainCollection: true,
-    scannable: true,
-    published: true,
-    inScavengerHunt: true,
-    markerImage: "./assets/mcarthurmarker.jpg",
-  },
-  {
-    id: "builtin-trias",
-    name: "Mariano Trías",
-    image: "./assets/MarianoTriasMarker.png",
-    artist: "GBR Jr. Museum Collection",
-    year: "1868–1914",
-    location: "GBR Jr. Museum, General Trias, Philippines",
-    details:
-      "Mariano Trías y Closas (October 12, 1868 – February 22, 1914) was a Filipino physician, " +
-      "revolutionary general, and statesman who became the first Vice President of the Philippines. " +
-      "Born in San Francisco de Malabón, Cavite — the town now honored with his name as General Trias — " +
-      "he completed his medical studies at the University of Santo Tomas before joining the Katipunan. " +
-      "During the revolution in Cavite he led Filipino troops as a general, and on March 22, 1897 the " +
-      "Tejeros Convention elected him Vice President of the revolutionary government under President " +
-      "Emilio Aguinaldo. He went on to serve as Secretary of War in the cabinet of the Biak-na-Bato " +
-      "Republic and stayed loyal to the cause through the Philippine–American War. He died on " +
-      "February 22, 1914, and the municipality of General Trias, Cavite, keeps his memory alive in its name.",
-    baseScale: 0.18,
-    icon: "🏛️",
-    hasModel: true,
-    showInMainCollection: true,
-    scannable: true,
-    published: true,
-    inScavengerHunt: true,
-    markerImage: "./assets/MarianoTriasMarker.png",
-  },
-
-];
-
 // -------------------------------------------------------------------
 // DOM refs
 // -------------------------------------------------------------------
@@ -1258,12 +1196,12 @@ async function loadCounts() {
     const lbData = await lbRes.json();
     const notesData = await notesRes.json();
 
-    cachedArtworkStats = [...BUILTIN_ARTWORKS, ...(artData ? Object.values(artData) : [])];
+    cachedArtworkStats = artData ? Object.values(artData) : [];
     cachedLeaderboardStats = lbData ? Object.entries(lbData) : [];
     cachedNoteStats = notesData ? Object.entries(notesData) : [];
 
     const uploadedCount = artData ? Object.keys(artData).length : 0;
-    setStatText("stat-artwork-count", BUILTIN_ARTWORKS.length + uploadedCount);
+    setStatText("stat-artwork-count", uploadedCount);
     setStatText("stat-leaderboard-count", cachedLeaderboardStats.length);
     setStatText("stat-notes-count", cachedNoteStats.length);
   } catch (err) {
@@ -1722,7 +1660,6 @@ function artworkThumb(art) {
 // Quiz builder
 // ---------------------------------------------------------------------
 let editingQuizOnly = false;
-let editingArtworkSource = null;
 let quizQuestionUid = 0;
 
 function sanitizeQuiz(raw) {
@@ -1991,7 +1928,7 @@ function openHologramEditor(art) {
   hologramEditingArtwork = art;
   if (hologramModalTitle) hologramModalTitle.textContent = art.name || "Hologram Signs";
   if (hologramModalArtwork) {
-    hologramModalArtwork.textContent = art.artist || (art._source === "builtin" ? "Built-in artwork" : "Uploaded artwork");
+    hologramModalArtwork.textContent = art.artist || "Uploaded artwork";
   }
   if (hologramModalStatus) {
     hologramModalStatus.textContent = "";
@@ -2147,7 +2084,6 @@ if (hologramModalList) {
 function resetArtworkForm() {
   editingArtworkId = null;
   editingQuizOnly = false;
-  editingArtworkSource = null;
   artworkDrawer.classList.remove("quiz-mode");
   renderQuizEditor([]);
   document.getElementById("artwork-name").value = "";
@@ -2182,7 +2118,6 @@ function resetArtworkForm() {
 async function startArtworkSettingsEdit(art) {
   editingArtworkId = art.id;
   editingQuizOnly = false;
-  editingArtworkSource = art._source || (art.key ? "uploaded" : "builtin");
   artworkDrawer.classList.remove("quiz-mode");
   renderQuizEditor(readQuizFromArtwork(art));
   document.getElementById("artwork-name").value = art.name || "";
@@ -2221,7 +2156,6 @@ async function startArtworkSettingsEdit(art) {
 function startQuizEdit(art) {
   resetArtworkForm();
   editingArtworkId = art.id;
-  editingArtworkSource = art._source || (art.key ? "uploaded" : "builtin");
   editingQuizOnly = true;
   document.getElementById("artwork-name").value = art.name || "";
   document.getElementById("artwork-artist").value = art.artist || "";
@@ -2299,10 +2233,7 @@ async function loadAdminArtworks() {
       }
     }
 
-    const merged = [
-      ...BUILTIN_ARTWORKS.map((a) => ({ ...a, _source: "builtin" })),
-      ...uploadedArtworksCache.map((a) => ({ ...a, _source: "uploaded", id: a.key })),
-    ];
+    const merged = uploadedArtworksCache.map((a) => ({ ...a, id: a.key }));
     allArtworksCache = merged.map((art) => ({
       ...art,
       inScavengerHunt: effectiveHuntStatus(art),
@@ -2352,7 +2283,6 @@ function renderAdminArtworks() {
 
   adminArtworksList.innerHTML = visible
     .map((art) => {
-      const isBuiltin = art._source === "builtin";
       const thumb = artworkThumb(art);
       const meta = [art.artist, art.year].filter(Boolean).join(" · ") || "No metadata";
       const thumbMarkup = thumb
@@ -2365,7 +2295,7 @@ function renderAdminArtworks() {
           <p class="artwork-name">${escapeHtml(art.name)}</p>
           <p class="artwork-meta">${escapeHtml(meta)}</p>
           <div class="artwork-tags">
-            <span class="artwork-source ${isBuiltin ? "builtin" : ""}">${isBuiltin ? "Built-in" : "Uploaded"}</span>
+            <span class="artwork-source">Uploaded</span>
             <span class="status-pill ${art.published === false ? "draft" : "published"}">${art.published === false ? "Draft" : "Published"}</span>
             ${art.scannable === false ? "" : `<span class="status-pill">AR</span>`}
             <span class="status-pill ${art.inScavengerHunt ? "hunt" : "muted"}">${art.inScavengerHunt ? "Scavenger hunt" : "Not in hunt"}</span>
@@ -2382,9 +2312,8 @@ function renderAdminArtworks() {
           <div class="artwork-row-actions">
             <button class="btn-tiny artwork-holo-btn" type="button" data-artwork-id="${escapeAttr(art.id)}">Holograms</button>
             <button class="btn-tiny artwork-quiz-btn" type="button" data-artwork-id="${escapeAttr(art.id)}">Quiz</button>
-            ${isBuiltin ? "" : `
             <button class="btn-tiny artwork-edit-btn" type="button" data-artwork-id="${escapeAttr(art.id)}">Edit</button>
-            <button class="admin-delete-btn" type="button" data-path="artworks/${escapeAttr(art.id)}" data-label="this artwork">Delete</button>`}
+            <button class="admin-delete-btn" type="button" data-path="artworks/${escapeAttr(art.id)}" data-label="this artwork">Delete</button>
           </div>
         </div>
       </div>`;
@@ -2442,17 +2371,15 @@ async function updateArtworkHunt(artworkId, shouldInclude) {
     let settingsSaved = false;
     let settingsError = null;
 
-    if (artwork._source === "uploaded") {
-      const artResponse = await fetch(`${FIREBASE_URL}/artworks/${encodeURIComponent(artworkId)}.json?auth=${idToken}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ inScavengerHunt: shouldInclude }),
-      });
-      if (!artResponse.ok) throw new Error(`Artwork update failed (${artResponse.status}).`);
-      artworkSaved = true;
-      const cached = uploadedArtworksCache.find((item) => item.key === artworkId);
-      if (cached) cached.inScavengerHunt = shouldInclude;
-    }
+    const artResponse = await fetch(`${FIREBASE_URL}/artworks/${encodeURIComponent(artworkId)}.json?auth=${idToken}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ inScavengerHunt: shouldInclude }),
+    });
+    if (!artResponse.ok) throw new Error(`Artwork update failed (${artResponse.status}).`);
+    artworkSaved = true;
+    const cached = uploadedArtworksCache.find((item) => item.key === artworkId);
+    if (cached) cached.inScavengerHunt = shouldInclude;
 
     try {
       const settingsResponse = await fetch(`${FIREBASE_URL}/artworkSettings/${encodeURIComponent(artworkId)}.json?auth=${idToken}`, {
@@ -2674,17 +2601,16 @@ btnUploadArtwork.addEventListener("click", async () => {
       });
       if (!response.ok) throw new Error(`Quiz save failed (${response.status})`);
 
-      if (editingArtworkSource === "uploaded") {
-        try {
-          const artworkResponse = await fetch(`${FIREBASE_URL}/artworks/${encodeURIComponent(editingArtworkId)}.json?auth=${idToken}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ quiz }),
-          });
-          if (!artworkResponse.ok) console.warn("[Admin] Could not save quiz on artwork record:", artworkResponse.status);
-        } catch (artworkError) {
-          console.warn("[Admin] Could not save quiz on artwork record:", artworkError);
-        }
+      // The quiz lives on both the settings override and the artwork record.
+      try {
+        const artworkResponse = await fetch(`${FIREBASE_URL}/artworks/${encodeURIComponent(editingArtworkId)}.json?auth=${idToken}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ quiz }),
+        });
+        if (!artworkResponse.ok) console.warn("[Admin] Could not save quiz on artwork record:", artworkResponse.status);
+      } catch (artworkError) {
+        console.warn("[Admin] Could not save quiz on artwork record:", artworkError);
       }
 
       artworkSettingsCache[editingArtworkId] = { ...(artworkSettingsCache[editingArtworkId] || {}), quiz };
@@ -2894,11 +2820,7 @@ async function fetchUploadedArtworks() {
 }
 
 function allPublishedScannableArtworks(uploaded) {
-  const builtins = BUILTIN_ARTWORKS
-    .filter((art) => art.published !== false && art.scannable && art.markerImage)
-    .map((art) => ({ ...art, markerImageUrl: art.markerImage }));
-  const firebaseArtworks = uploaded.filter((art) => art.published !== false && art.scannable && (art.markerImageUrl || art.imageUrl));
-  return [...builtins, ...firebaseArtworks];
+  return uploaded.filter((art) => art.published !== false && art.scannable && (art.markerImageUrl || art.imageUrl));
 }
 
 async function loadCompilerImage(url) {

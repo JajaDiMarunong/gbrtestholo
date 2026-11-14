@@ -50,15 +50,15 @@ supabase secrets set TAVILY_API_KEY=tvly-... --project-ref <ref>
 curl -sS "https://<ref>.functions.supabase.co/functions/v1/learn-more" \
   -H "Content-Type: application/json" \
   -H "X-Device-Id: test-device" \
-  -d '{"artId":"builtin-mcarthur","name":"General Douglas MacArthur","artist":"GBR Jr. Museum Collection","year":"20th Century","location":"GBR Jr. Museum, General Trias, Philippines"}'
+  -d '{"artId":"art-1791702942829-bunwa","name":"Puente de Malabon (Malabon Bridge)","artist":"GBR Jr. Museum Collection","year":"19th Century","location":"GBR Jr. Museum, General Trias, Philippines"}'
 ```
 
 Success (200):
 
 ```json
 {
-  "artId": "builtin-mcarthur",
-  "name": "General Douglas MacArthur",
+  "artId": "art-1791702942829-bunwa",
+  "name": "Puente de Malabon (Malabon Bridge)",
   "summary": "One to three short paragraphs, separated by blank lines.",
   "facts": [{ "label": "Rank", "value": "General of the Army" }],
   "caution": "Empty when the sources agree.",

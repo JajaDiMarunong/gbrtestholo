@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="GBR Admin" />
 <link rel="apple-touch-icon" href="./assets/logo.png" />
-<link rel="stylesheet" href="admin.css?v=19" />
+<link rel="stylesheet" href="admin.css?v=20" />
 <script src="asset-manifest.js"></script>
 <script src="offline-store.js?v=1"></script>
 <script>
@@ -435,12 +435,12 @@
                   <div class="form-group">
                     <label for="artwork-model-scale">AR Model Scale</label>
                     <input id="artwork-model-scale" class="text-input" type="number" min="0.001" max="10" step="0.001" value="0.5" />
-                    <span class="upload-hint">Crisanto uses 0.5</span>
+                    <span class="upload-hint">Model size on the marker. Start at 0.5 and adjust</span>
                   </div>
                   <div class="form-group">
                     <label for="artwork-model-forward">Forward Position (Z)</label>
                     <input id="artwork-model-forward" class="text-input" type="number" min="-5" max="5" step="0.01" value="0.1" />
-                    <span class="upload-hint">Crisanto uses 0.1</span>
+                    <span class="upload-hint">Distance in front of the marker. Default: 0.1</span>
                   </div>
                 </div>
 
@@ -448,12 +448,12 @@
                   <div class="form-group">
                     <label for="artwork-immersive-scale">Immersive Scale</label>
                     <input id="artwork-immersive-scale" class="text-input" type="number" min="0.001" max="100" step="0.01" value="1" />
-                    <span class="upload-hint">Skybox size (Crisanto: 1, MacArthur: 3.5)</span>
+                    <span class="upload-hint">Skybox size. Try 1 for a small set, 3.5 for a wide one</span>
                   </div>
                   <div class="form-group">
                     <label for="artwork-immersive-rotation">Immersive Rotation (X Y Z)</label>
                     <input id="artwork-immersive-rotation" class="text-input" type="text" value="0 0 0" placeholder="e.g. 0 270 0" />
-                    <span class="upload-hint">Degrees: pitch yaw roll (MacArthur: 0 270 0)</span>
+                    <span class="upload-hint">Degrees: pitch yaw roll. Try 0 270 0 if the skybox faces away</span>
                   </div>
                 </div>
 
@@ -669,6 +669,6 @@
   </script>
 
   <script src="recaptcha.js?v=5" defer></script>
-  <script src="admin.js?v=27" defer></script>
+  <script src="admin.js?v=30" defer></script>
 </body>
 </html>

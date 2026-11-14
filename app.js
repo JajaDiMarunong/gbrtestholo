@@ -71,109 +71,10 @@ document.addEventListener(
 );
 
 // -------------------------------------------------------------------
-// Built-in artworks (local assets). Uploaded artworks are merged
-// from Firebase at runtime.
+// Artworks
+// No artwork records are bundled with the app: every one of them is uploaded
+// through the admin console and merged from Firebase in initArtworks().
 // -------------------------------------------------------------------
-const BUILTIN_ARTWORKS = [
-  {
-    id: "builtin-crisanto",
-    name: "Portrait of Crisanto de los Reyes y Mendoza",
-    image: "./assets/crisanto-marker.jpg",
-    artist: "Rafael del Casal",
-    year: "Undated",
-    location: "GBR Jr. Museum, General Trias, Philippines",
-    details:
-      "Crisanto de los Reyes was born on October 25, 1828 to a Chinese mestizo couple " +
-      "Gregorio de los Reyes and Dominga Mendoza of Quiapo. From his salary as a tenedor de libros " +
-      "(book-keeper) he got into the business of buying scrap metals, later acquiring properties in " +
-      "Binondo which he converted into almacenes (warehouses). He married Dorotea de los Reyes y Vergara " +
-      "and bore five children. Among his businesses was a distillery of ylang-ylang (Cananga odorata) oil, " +
-      "a sought-after ingredient for French perfumes, and a tobacco factory along Calle Alix (present-day Legarda). " +
-      "He was implicated in the 1872 Cavite Mutiny and exiled to Cartagena, Spain, returning in 1877 after " +
-      "an amnesty from King Alfonso XII. He died on July 4, 1895. In 2007, Republic Act No. 9476 renamed " +
-      "the Gen. Trias – Amadeo – Tagaytay Road (formerly Governor's Drive) to Crisanto M. De los Reyes.\n\n" +
-      "Portrait of Crisanto de los Reyes y Mendoza\nRafael del Casal\nOil on canvas\nUndated",
-    markerImage: "./assets/crisanto-marker.jpg",
-    modelObj: "./assets/crisantonew.glb",
-    modelMtl: null,
-    // crisantonew.glb is a whole diorama (about 20.5 units across) instead of a
-    // 2.6-unit bust, so the scales are trimmed to keep the same on-screen size.
-    baseScale: 0.063,
-    icon: "🎨",
-    animationClip: "All_Models_Loop",
-    immersiveSkybox: "./assets/crisantoskybox.optimized.glb",
-    immersiveScale: 0.38,
-    immersiveRotation: "0 0 0",
-    unlocked: false,
-    showInMainCollection: true,
-    scannable: true,
-    published: true,
-    inScavengerHunt: true,
-    quiz: [],
-    quizCompleted: false,
-  },
-{
-    id: "builtin-mcarthur",
-    name: "General Douglas MacArthur",
-    image: "./assets/mcarthurmarker.jpg",
-    artist: "GBR Jr. Museum Collection",
-    year: "20th Century",
-    location: "GBR Jr. Museum, General Trias, Philippines",
-    details: "General Douglas MacArthur (1880–1964) was a 5-star General of the Army and one of the most prominent military leaders in American history, best known for his command of Allied forces in the Southwest Pacific during World War II. Born on January 26, 1880, in Little Rock, Arkansas, and passing away on April 5, 1964, in Washington, D.C., MacArthur played a pivotal role in the history of the Philippines—first as Field Marshal of the Philippine Army and later as Supreme Commander of Allied Forces. After being forced to evacuate Corregidor in March 1942 under direct orders from President Franklin D. Roosevelt, he famously made his enduring personal pledge to the Filipino people at Terowie Railway Station in South Australia: \"I came through and I shall return.\" He fulfilled that promise two and a half years later on October 20, 1944, when he waded ashore at Red Beach in Palo, Leyte, declaring, \"People of the Philippines, I have returned!\"—a historic landing that initiated the liberation of the archipelago and cemented his legacy in Philippine history.",
-    markerImage: "./assets/mcarthurmarker.jpg",
-    modelObj: "./assets/mcarthur.optimized.glb",
-    modelMtl: null,
-    baseScale: 1,
-    icon: "🎖️",
-    unlocked: false,
-    showInMainCollection: true,
-    scannable: true,
-    published: true,
-    inScavengerHunt: true,
-    immersiveSkybox: "./assets/beachskybox.optimized.glb",
-    immersiveScale: 3.5,
-    immersiveRotation: "0 270 0",
-    markerRotation: "0 270 0",
-    quiz: [],
-    quizCompleted: false,
-  },
-  {
-    id: "builtin-trias",
-    name: "Mariano Trías",
-    image: "./assets/MarianoTriasMarker.png",
-    artist: "GBR Jr. Museum Collection",
-    year: "1868–1914",
-    location: "GBR Jr. Museum, General Trias, Philippines",
-    details:
-      "Mariano Trías y Closas (October 12, 1868 – February 22, 1914) was a Filipino physician, " +
-      "revolutionary general, and statesman who became the first Vice President of the Philippines. " +
-      "Born in San Francisco de Malabón, Cavite — the town now honored with his name as General Trias — " +
-      "he completed his medical studies at the University of Santo Tomas before joining the Katipunan. " +
-      "During the revolution in Cavite he led Filipino troops as a general, and on March 22, 1897 the " +
-      "Tejeros Convention elected him Vice President of the revolutionary government under President " +
-      "Emilio Aguinaldo. He went on to serve as Secretary of War in the cabinet of the Biak-na-Bato " +
-      "Republic and stayed loyal to the cause through the Philippine–American War. He died on " +
-      "February 22, 1914, and the municipality of General Trias, Cavite, keeps his memory alive in its name.",
-    markerImage: "./assets/MarianoTriasMarker.png",
-    modelObj: "./assets/MarianoTrias.glb",
-    modelMtl: null,
-    baseScale: 0.18,
-    icon: "🏛️",
-    animationClip: "All_Models_Loop",
-    immersiveSkybox: "./assets/MarianoTriasSkybox.glb",
-    immersiveScale: 1.1,
-    immersiveRotation: "0 0 0",
-    unlocked: false,
-    showInMainCollection: true,
-    scannable: true,
-    published: true,
-    inScavengerHunt: true,
-    quiz: [],
-    quizCompleted: false,
-  },
-
-];
-
 // Mutable artworks array — populated by initArtworks()
 let artworks = [];
 
@@ -3747,6 +3648,7 @@ let cachedMindBlobUrl = null;
 let cachedMindBlobSrc = null;
 
 async function resolveMindTargetBlobUrl(src) {
+  if (!src) return "";
   if (typeof src === "string" && src.startsWith("blob:")) {
     return src;
   }
@@ -3787,29 +3689,33 @@ async function resolveMindTargetBlobUrl(src) {
     }
   } catch (_) {}
 
-  // 3. Fallback to built-in ./assets/targets.mind if src was a remote or dynamic URL
-  if (src !== "./assets/targets.mind") {
-    console.warn("[initAR] Custom target bundle failed or timed out, falling back to built-in targets.mind");
-    return resolveMindTargetBlobUrl("./assets/targets.mind");
-  }
-
   return src;
 }
 
 async function initAR() {
   console.log("[initAR] Starting AR initialization");
-  const bundledTargetIds = new Set(BUILTIN_ARTWORKS.filter((a) => a.markerImage).map((a) => a.id));
-  let scannable = artworks.filter((a) => bundledTargetIds.has(a.id));
-  let imageTargetSrc = "./assets/targets.mind";
+  // Each entry stays aligned with the target index compiled into the .mind file.
+  let scannable = [];
+  let imageTargetSrc = "";
+  let targetCount = 0;
 
   try {
     const bundle = await loadPublishedArBundle();
     if (bundle) {
       const byId = new Map(artworks.map((art) => [art.id, art]));
-      const mapped = bundle.targets.map((target) => byId.get(target.artworkId)).filter(Boolean);
-      if (mapped.length === bundle.targets.length) {
+      const mapped = [];
+      bundle.targets.forEach((target) => {
+        const art = byId.get(target.artworkId);
+        if (art) mapped.push({ art, targetIndex: target.targetIndex });
+        else console.warn("[initAR] Bundle target has no artwork record, skipping:", target.artworkId);
+      });
+      // Older bundles still carry artworks that have since been removed. The
+      // remaining targets keep their compiled indices, so a stale entry only
+      // costs that one marker instead of the whole bundle.
+      if (mapped.length) {
         scannable = mapped;
         imageTargetSrc = bundle.mindUrl;
+        targetCount = bundle.targets.length;
         loadingText.textContent = "Recognition data ready. Starting camera…";
       }
     }
@@ -3817,17 +3723,28 @@ async function initAR() {
     console.warn("Could not load published AR bundle:", error);
   }
 
+  // The app no longer bundles any artwork or compiled marker set, so the only
+  // scan targets are the ones an admin published from the console. Without that
+  // bundle MindAR has nothing to track: say so instead of opening a camera feed
+  // that can never match anything.
+  if (!scannable.length || !imageTargetSrc) {
+    loadingScreen.classList.add("hidden");
+    scanHint.textContent = "No scan targets yet — ask the museum staff to publish the AR targets.";
+    console.warn("[initAR] No published AR bundle, nothing to scan.");
+    return;
+  }
+
   // Resolve target to an in-memory blob URL immediately (0ms network delay for MindAR)
   const targetBlobUrl = await resolveMindTargetBlobUrl(imageTargetSrc);
 
   const targetEntities = scannable
-    .map((art, i) => `<a-entity id="ar-target-${i}" mindar-image-target="targetIndex: ${i}"></a-entity>`)
+    .map(({ targetIndex }) => `<a-entity id="ar-target-${targetIndex}" mindar-image-target="targetIndex: ${targetIndex}"></a-entity>`)
     .join("\n");
 
   arContainer.innerHTML = `
     <a-scene
       id="ar-scene"
-      mindar-image="imageTargetSrc: ${targetBlobUrl}; maxTrack: ${scannable.length}; filterMinCF: 0.001; filterBeta: 1000; missTolerance: 20; warmupTolerance: 2; uiLoading: no; uiScanning: no; uiError: no;"
+      mindar-image="imageTargetSrc: ${targetBlobUrl}; maxTrack: ${targetCount}; filterMinCF: 0.001; filterBeta: 1000; missTolerance: 20; warmupTolerance: 2; uiLoading: no; uiScanning: no; uiError: no;"
       color-space="sRGB"
       renderer="colorManagement: true, physicallyCorrectLights"
       vr-mode-ui="enabled: false"
@@ -3867,10 +3784,10 @@ async function initAR() {
   // If it takes longer than 2.5s on a weak device, hide loading overlay anyway so camera isn't obstructed
   setTimeout(hideLoading, 2500);
 
-  scannable.forEach((art, i) => {
-    const targetEl = document.getElementById(`ar-target-${i}`);
-    targetEl?.addEventListener("targetFound", () => handleTargetFound(art, i, targetEl));
-    targetEl?.addEventListener("targetLost", () => handleTargetLost(i));
+  scannable.forEach(({ art, targetIndex }) => {
+    const targetEl = document.getElementById(`ar-target-${targetIndex}`);
+    targetEl?.addEventListener("targetFound", () => handleTargetFound(art, targetIndex, targetEl));
+    targetEl?.addEventListener("targetLost", () => handleTargetLost(targetIndex));
   });
 
   console.log("[initAR] AR initialization complete, waiting for renderstart...");
@@ -3897,8 +3814,8 @@ function stopAR() {
   }
   console.log("[stopAR] Stopping AR, cleaning up...");
 
-  arScannable.forEach((_, i) => {
-    const modelEl = document.getElementById(`model-${i}`);
+  arScannable.forEach(({ targetIndex }) => {
+    const modelEl = document.getElementById(`model-${targetIndex}`);
     if (modelEl) {
       cancelModelReveal(modelEl);
       disposeModel(modelEl);
@@ -3986,11 +3903,11 @@ async function loadPublishedArBundle() {
 }
 
 // =====================================================================
-// DYNAMIC ARTWORK LOADING (built-in + Firebase uploads)
+// DYNAMIC ARTWORK LOADING (Firebase uploads)
 // =====================================================================
 async function initArtworks() {
-  // Start with built-in artworks
-  let merged = BUILTIN_ARTWORKS.map((a) => ({ ...a }));
+  // No records are bundled with the app; everything below comes from Firebase.
+  let merged = [];
 
   // Fetch uploaded artworks from Firebase
   try {
@@ -4047,8 +3964,8 @@ const uploaded = Object.entries(data).map(([key, val]) => ({
     console.warn("Could not load uploaded artworks from Firebase:", err);
   }
 
-  // Scavenger hunt inclusion is stored separately so built-in artworks can be
-  // toggled without duplicating their full records.
+  // Scavenger hunt inclusion, quizzes and holograms are stored separately so a
+  // record can be retuned without rewriting the whole artwork entry.
   try {
     const settingsRes = await fetch(`${FIREBASE_URL}/artworkSettings.json`);
     if (settingsRes.ok) {

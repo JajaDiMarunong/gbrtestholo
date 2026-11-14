@@ -1149,7 +1149,6 @@ body.drawer-open { overflow: hidden; }
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-.artwork-source.builtin { color: var(--text-dim); background: rgba(255, 255, 255, 0.06); }
 .status-pill { color: var(--muted); background: rgba(255, 255, 255, 0.055); }
 .status-pill.published { color: var(--success); background: rgba(124, 196, 125, 0.1); }
 .status-pill.draft { color: #e7b46f; background: rgba(231, 180, 111, 0.1); }
