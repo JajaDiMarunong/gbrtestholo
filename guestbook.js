@@ -10,7 +10,7 @@ const BOARD_WIDTH = 1600;
 const BOARD_HEIGHT = 1000;
 const NOTE_W = 180;
 const NOTE_H = 200;
-const NOTE_MARGIN = 36;
+const NOTE_MARGIN = 60; // vertical gap between note slots (also room to scatter)
 const MIN_NOTE_GAP = 24;
 const BOARD_PADDING = 30;
 const REFRESH_INTERVAL = 5; // seconds
@@ -281,8 +281,44 @@ async function loadNotesBoard() {
 }
 
 // -------------------------------------------------------------------
-// Overlap prevention
+// Post-it scatter layout
 // -------------------------------------------------------------------
+// Notes are dropped into an invisible grid of slots so two notes can never
+// sit on top of each other, then every note is nudged and tilted by a small
+// seeded amount. The seed comes from the note's own key, so a note keeps its
+// spot through refreshes instead of dancing around every 5 seconds.
+const LAYOUT_SEED = 0x6d2b79f5;
+const NOTES_BASE_ROWS = 4;      // rows kept on the board even when it is empty
+const NOTE_MAX_JITTER = 26;     // px a note may drift around its slot
+const NOTE_JITTER_SAFETY = 2;   // px kept free so slots never touch
+const NOTE_MAX_ROTATION = 8;    // degrees of "hand pinned" tilt
+
+let noteSlotOrderCache = { key: "", order: [] };
+
+function hashString(value) {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function clampNumber(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
 function getNotesBoardColumns() {
   const usableWidth = BOARD_WIDTH - BOARD_PADDING * 2;
   return Math.max(1, Math.floor((usableWidth + MIN_NOTE_GAP) / (NOTE_W + MIN_NOTE_GAP)));
@@ -295,21 +331,109 @@ function getNotesBoardHorizontalGap() {
   return (usableWidth - columns * NOTE_W) / (columns - 1);
 }
 
+function getNotesBoardRows(noteCount) {
+  // Keep enough rows to fill the default board so a handful of notes still
+  // scatters over the whole corkboard instead of hugging one line.
+  return Math.max(NOTES_BASE_ROWS, Math.ceil(Math.max(1, noteCount) / getNotesBoardColumns()));
+}
+
 function getNotesBoardHeight(noteCount) {
-  const rows = Math.max(1, Math.ceil(noteCount / getNotesBoardColumns()));
+  const rows = getNotesBoardRows(noteCount);
   return Math.max(
     BOARD_HEIGHT,
     BOARD_PADDING * 2 + rows * NOTE_H + (rows - 1) * NOTE_MARGIN
   );
 }
 
-function getNoteBoardPosition(index) {
+function getShuffledNoteSlots(rows) {
+  const columns = getNotesBoardColumns();
+  const cacheKey = `${rows}x${columns}`;
+  if (noteSlotOrderCache.key === cacheKey) return noteSlotOrderCache.order;
+
+  const random = mulberry32(hashString(`guestbook-slots|${cacheKey}`) ^ LAYOUT_SEED);
+  const order = Array.from({ length: rows * columns }, (_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    const temp = order[i];
+    order[i] = order[j];
+    order[j] = temp;
+  }
+  noteSlotOrderCache = { key: cacheKey, order };
+  return order;
+}
+
+function getNoteSlotPosition(slotIndex) {
   const columns = getNotesBoardColumns();
   const gap = getNotesBoardHorizontalGap();
   return {
-    x: BOARD_PADDING + (index % columns) * (NOTE_W + gap),
-    y: BOARD_PADDING + Math.floor(index / columns) * (NOTE_H + NOTE_MARGIN),
+    x: BOARD_PADDING + (slotIndex % columns) * (NOTE_W + gap),
+    y: BOARD_PADDING + Math.floor(slotIndex / columns) * (NOTE_H + NOTE_MARGIN),
   };
+}
+
+function getNoteSeed(note) {
+  const key = note.deviceId || note.ownerId || note.id;
+  const stableKey = key ? `note:${key}` : `note:${note.timestamp || 0}`;
+  return hashString(stableKey) ^ LAYOUT_SEED;
+}
+
+function getNoteRotation(note, random) {
+  // The phone app already stores a random tilt for each note — keep it so the
+  // TV and the phone show the same sheet of paper. Older notes without one get
+  // a seeded tilt instead of lying perfectly flat.
+  const saved = Number(note.rotation);
+  if (Number.isFinite(saved) && Math.abs(saved) >= 1) {
+    return clampNumber(saved, -NOTE_MAX_ROTATION, NOTE_MAX_ROTATION);
+  }
+  const tilt = NOTE_MAX_ROTATION * (random() * 2 - 1);
+  return tilt >= 0 ? Math.max(1.5, tilt) : Math.min(-1.5, tilt);
+}
+
+// How much wider/taller a tilted note becomes around its untilted box. This
+// is what decides how far a note may drift without ever touching a neighbour.
+function getNoteExpansion(rotation) {
+  const radians = (Math.abs(rotation) * Math.PI) / 180;
+  return {
+    x: NOTE_W * Math.cos(radians) + NOTE_H * Math.sin(radians) - NOTE_W,
+    y: NOTE_W * Math.sin(radians) + NOTE_H * Math.cos(radians) - NOTE_H,
+  };
+}
+
+function getNoteJitterLimit(rotation) {
+  const expansion = getNoteExpansion(rotation);
+  const gap = getNotesBoardHorizontalGap();
+  return {
+    x: Math.max(0, Math.min(NOTE_MAX_JITTER, (gap - expansion.x) / 2 - NOTE_JITTER_SAFETY)),
+    y: Math.max(0, Math.min(NOTE_MAX_JITTER, (NOTE_MARGIN - expansion.y) / 2 - NOTE_JITTER_SAFETY)),
+  };
+}
+
+function buildNotesLayout(notes) {
+  const rows = getNotesBoardRows(notes.length);
+  const slotOrder = getShuffledNoteSlots(rows);
+  const boardHeight = getNotesBoardHeight(notes.length);
+
+  return notes.map((note, index) => {
+    const slot = getNoteSlotPosition(slotOrder[index]);
+    const random = mulberry32(getNoteSeed(note));
+    const rotation = getNoteRotation(note, random);
+    const expansion = getNoteExpansion(rotation);
+    const jitter = getNoteJitterLimit(rotation);
+
+    // Keep the drift inside the note's own slot, so neighbouring notes can
+    // never be covered even when the board is completely full.
+    const x = clampNumber(
+      slot.x + (random() * 2 - 1) * jitter.x,
+      expansion.x / 2,
+      BOARD_WIDTH - NOTE_W - expansion.x / 2
+    );
+    const y = clampNumber(
+      slot.y + (random() * 2 - 1) * jitter.y,
+      expansion.y / 2,
+      boardHeight - NOTE_H - expansion.y / 2
+    );
+    return { x, y, rotation };
+  });
 }
 
 function renderNotesBoard() {
@@ -318,19 +442,19 @@ function renderNotesBoard() {
     (a, b) => (a.timestamp || 0) - (b.timestamp || 0) || a.deviceId.localeCompare(b.deviceId)
   );
 
-  // Always recalculate positions for TV display — ignore stored x/y
-  // since they were calculated for a different board size / note size
+  // Always recalculate positions for the TV display — stored x/y were picked
+  // for the phone board, and the scatter layout keeps every note readable.
+  const layout = buildNotesLayout(notesForDisplay);
+
   notesForDisplay.forEach((note, idx) => {
-    const pos = getNoteBoardPosition(idx);
-    note.x = pos.x;
-    note.y = pos.y;
+    const pos = layout[idx];
 
     const el = document.createElement("div");
     el.className = "note-sticky" + (note.type === "photo" ? " type-photo" : "");
-    el.style.left = note.x + "px";
-    el.style.top = note.y + "px";
-    el.style.setProperty("--rot", (note.rotation || 0) + "deg");
-    el.style.transform = `rotate(${note.rotation || 0}deg)`;
+    el.style.left = pos.x + "px";
+    el.style.top = pos.y + "px";
+    el.style.setProperty("--rot", pos.rotation + "deg");
+    el.style.transform = `rotate(${pos.rotation}deg)`;
     if (note.type !== "photo") el.style.background = note.color || "#f4d35e";
     el.style.animationDelay = (idx * 0.05) + "s";
 
