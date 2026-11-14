@@ -3143,12 +3143,18 @@ async function describeAdminWriteFailure(res) {
   return `Firebase answered ${res.status}${detail ? ` ${detail}` : ""}.`;
 }
 
-// Network-level failures (offline, blocked request) reject the fetch instead of
-// returning a status, so give them their own wording.
-function describeNetworkFailure(err) {
-  return err instanceof TypeError
-    ? "the request never reached Firebase — check the connection and try again"
-    : (err && err.message) || "unknown error";
+// Failures arrive in three shapes: a rejected fetch (offline/blocked), a Firebase
+// auth error when the token could not even be refreshed, or our own message built
+// from the HTTP status. Each one gets an instruction staff can follow.
+function describeRequestFailure(err) {
+  const code = (err && err.code) || "";
+  if (code.startsWith("auth/")) {
+    return "your admin session expired — sign out and sign in again, then retry";
+  }
+  if (err instanceof TypeError) {
+    return "the request never reached Firebase — check the connection and try again";
+  }
+  return ((err && err.message) || "unknown error").replace(/[.\s]+$/, "");
 }
 
 function attachDeleteHandlers() {
@@ -3181,7 +3187,7 @@ function attachDeleteHandlers() {
       } catch (err) {
         const uid = firebase.auth().currentUser ? firebase.auth().currentUser.uid : "none";
         console.error(`Delete failed (signed in as ${uid}):`, err);
-        alert(`Delete failed: ${describeNetworkFailure(err)}.`);
+        alert(`Delete failed: ${describeRequestFailure(err)}.`);
       } finally {
         loadAllData();
       }
@@ -3226,7 +3232,7 @@ async function clearCollection(collection, label) {
   } catch (err) {
     const uid = firebase.auth().currentUser ? firebase.auth().currentUser.uid : "none";
     console.error(`Clear failed (signed in as ${uid}):`, err);
-    alert(`Clear failed: ${describeNetworkFailure(err)}.`);
+    alert(`Clear failed: ${describeRequestFailure(err)}.`);
   } finally {
     loadAllData();
   }
