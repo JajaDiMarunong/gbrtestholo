@@ -95,6 +95,23 @@ throws, and the client classifies it as `network`. Behaviour in that case:
 - a wrong or missing `RECAPTCHA_SECRET_KEY` is `misconfigured` (500), also
   degraded, never "you are a bot".
 
+Two loader-side failures look the same from the page (the gate keeps saying
+"verification is unavailable") but have different causes:
+
+- `net::ERR_BLOCKED_BY_ORB` for `https://www.google.com/recaptcha/api.js…` means
+  the loader URL itself was rejected before it ran. `badge=hidden` is **not** a
+  documented value: Google answers it with an HTML `400 Bad Request` page and
+  Chrome blocks HTML served as a script. Only `bottomright`, `bottomleft` and
+  `inline` are valid. `recaptcha.js` therefore loads the default badge and
+  `style.css`/`admin.css` hide `.grecaptcha-badge` with CSS; the plain-text
+  attribution in the gate, Settings and the admin card keeps the notice visible.
+- `browser-error` from Google means the token was minted on a host the site key
+  does not list. The reCAPTCHA console must contain every host the app is served
+  from — `gbrmuseumtest.web.app`, `gbrmuseumtest.firebaseapp.com`, `localhost`
+  and `127.0.0.1`. Check it quickly by loading
+  `https://www.google.com/recaptcha/api2/anchor?ar=1&k=<site key>&size=invisible&co=<base64 of the origin>`;
+  the page reports "Invalid domain for site key" when the origin is missing.
+
 So a `git push` or a hosting deploy is not enough: run the two
 `recaptcha-verify` commands above (`supabase secrets set RECAPTCHA_SECRET_KEY=…`
 and `supabase functions deploy recaptcha-verify`). Until then the browser console

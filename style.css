@@ -1904,9 +1904,9 @@ html.recaptcha-passed .recaptcha-gate { display: none; }
   color: rgba(244, 241, 234, 0.42);
 }
 .recaptcha-gate-legal a { color: var(--frame-gold); text-decoration: none; }
-/* recaptcha.js asks for badge=hidden; this rule also covers a loader that was
-   cached before that change, so the floating badge never reappears. The
-   attribution below keeps the notice visible without the badge. */
+/* recaptcha.js loads api.js with the default badge and hides it here (Google
+   400s on the undocumented badge=hidden value). The attribution below keeps
+   the notice visible without the badge. */
 .grecaptcha-badge { visibility: hidden !important; opacity: 0 !important; }
 .recaptcha-attribution {
   margin: 18px 0 0;

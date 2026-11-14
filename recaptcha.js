@@ -19,11 +19,14 @@
 
   const SITE_KEY = "6LduFx4uAAAAAIbhUmAqwZ9Ihl9P7yQZH9qvmQln";
   const VERIFY_URL = "https://twkgioiyfjfkppzerdii.functions.supabase.co/functions/v1/recaptcha-verify";
-  // badge=hidden stops Google injecting the floating "protected by reCAPTCHA"
-  // badge in the bottom-right corner. Google's terms require the attribution to
-  // stay visible to the visitor, so the gate, the Settings screen (style.css)
-  // and the admin sign-in card (admin.css) print it as plain text.
-  const SCRIPT_SRC = `https://www.google.com/recaptcha/api.js?render=${SITE_KEY}&badge=hidden`;
+  // Only the documented `badge` values (bottomright, bottomleft, inline) are
+  // accepted: Google answers `badge=hidden` with an HTML "400 Bad Request" page,
+  // and Chrome blocks that HTML served as a script (net::ERR_BLOCKED_BY_ORB), so
+  // the loader never runs. The default badge is injected and hidden with the
+  // `.grecaptcha-badge` rule in style.css/admin.css instead; Google's terms
+  // require the attribution to stay visible, so the gate, the Settings screen
+  // (style.css) and the admin sign-in card (admin.css) print it as plain text.
+  const SCRIPT_SRC = `https://www.google.com/recaptcha/api.js?render=${SITE_KEY}`;
   const SCRIPT_ID = "gbr-recaptcha-script";
 
   // One passing score covers the rest of the tab's session (six hours), so a
