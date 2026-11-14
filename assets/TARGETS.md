@@ -5,6 +5,7 @@ these source marker images, in exactly this order:
 
 1. `crisanto-marker.jpg`
 2. `mcarthurmarker.jpg`
+3. `MarianoTriasMarker.png`
 
 Save the MindAR compiler output in this folder with the exact filename
 `targets.mind`. The order matters: target indexes must match the built-in

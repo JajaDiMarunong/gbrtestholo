@@ -17,7 +17,7 @@ const BUILTIN_ARTWORKS = [
     year: "Undated",
     location: "GBR Jr. Museum, General Trias, Philippines",
     details: "Portrait of Crisanto de los Reyes y Mendoza by Rafael del Casal.",
-    baseScale: 0.5,
+    baseScale: 0.063,
     icon: "🎨",
     hasModel: true,
     showInMainCollection: true,
@@ -42,6 +42,32 @@ const BUILTIN_ARTWORKS = [
     published: true,
     inScavengerHunt: true,
     markerImage: "./assets/mcarthurmarker.jpg",
+  },
+  {
+    id: "builtin-trias",
+    name: "Mariano Trías",
+    image: "./assets/MarianoTriasMarker.png",
+    artist: "GBR Jr. Museum Collection",
+    year: "1868–1914",
+    location: "GBR Jr. Museum, General Trias, Philippines",
+    details:
+      "Mariano Trías y Closas (October 12, 1868 – February 22, 1914) was a Filipino physician, " +
+      "revolutionary general, and statesman who became the first Vice President of the Philippines. " +
+      "Born in San Francisco de Malabón, Cavite — the town now honored with his name as General Trias — " +
+      "he completed his medical studies at the University of Santo Tomas before joining the Katipunan. " +
+      "During the revolution in Cavite he led Filipino troops as a general, and on March 22, 1897 the " +
+      "Tejeros Convention elected him Vice President of the revolutionary government under President " +
+      "Emilio Aguinaldo. He went on to serve as Secretary of War in the cabinet of the Biak-na-Bato " +
+      "Republic and stayed loyal to the cause through the Philippine–American War. He died on " +
+      "February 22, 1914, and the municipality of General Trias, Cavite, keeps his memory alive in its name.",
+    baseScale: 0.18,
+    icon: "🏛️",
+    hasModel: true,
+    showInMainCollection: true,
+    scannable: true,
+    published: true,
+    inScavengerHunt: true,
+    markerImage: "./assets/MarianoTriasMarker.png",
   },
 
 ];

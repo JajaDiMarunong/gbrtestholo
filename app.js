@@ -94,12 +94,15 @@ const BUILTIN_ARTWORKS = [
       "the Gen. Trias – Amadeo – Tagaytay Road (formerly Governor's Drive) to Crisanto M. De los Reyes.\n\n" +
       "Portrait of Crisanto de los Reyes y Mendoza\nRafael del Casal\nOil on canvas\nUndated",
     markerImage: "./assets/crisanto-marker.jpg",
-    modelObj: "./assets/crisanto.glb",
+    modelObj: "./assets/crisantonew.glb",
     modelMtl: null,
-    baseScale: 0.5,
+    // crisantonew.glb is a whole diorama (about 20.5 units across) instead of a
+    // 2.6-unit bust, so the scales are trimmed to keep the same on-screen size.
+    baseScale: 0.063,
     icon: "🎨",
+    animationClip: "All_Models_Loop",
     immersiveSkybox: "./assets/crisantoskybox.optimized.glb",
-    immersiveScale: 3,
+    immersiveScale: 0.38,
     immersiveRotation: "0 0 0",
     unlocked: false,
     showInMainCollection: true,
@@ -131,6 +134,40 @@ const BUILTIN_ARTWORKS = [
     immersiveScale: 3.5,
     immersiveRotation: "0 270 0",
     markerRotation: "0 270 0",
+    quiz: [],
+    quizCompleted: false,
+  },
+  {
+    id: "builtin-trias",
+    name: "Mariano Trías",
+    image: "./assets/MarianoTriasMarker.png",
+    artist: "GBR Jr. Museum Collection",
+    year: "1868–1914",
+    location: "GBR Jr. Museum, General Trias, Philippines",
+    details:
+      "Mariano Trías y Closas (October 12, 1868 – February 22, 1914) was a Filipino physician, " +
+      "revolutionary general, and statesman who became the first Vice President of the Philippines. " +
+      "Born in San Francisco de Malabón, Cavite — the town now honored with his name as General Trias — " +
+      "he completed his medical studies at the University of Santo Tomas before joining the Katipunan. " +
+      "During the revolution in Cavite he led Filipino troops as a general, and on March 22, 1897 the " +
+      "Tejeros Convention elected him Vice President of the revolutionary government under President " +
+      "Emilio Aguinaldo. He went on to serve as Secretary of War in the cabinet of the Biak-na-Bato " +
+      "Republic and stayed loyal to the cause through the Philippine–American War. He died on " +
+      "February 22, 1914, and the municipality of General Trias, Cavite, keeps his memory alive in its name.",
+    markerImage: "./assets/MarianoTriasMarker.png",
+    modelObj: "./assets/MarianoTrias.glb",
+    modelMtl: null,
+    baseScale: 0.18,
+    icon: "🏛️",
+    animationClip: "All_Models_Loop",
+    immersiveSkybox: "./assets/MarianoTriasSkybox.glb",
+    immersiveScale: 1.1,
+    immersiveRotation: "0 0 0",
+    unlocked: false,
+    showInMainCollection: true,
+    scannable: true,
+    published: true,
+    inScavengerHunt: true,
     quiz: [],
     quizCompleted: false,
   },
@@ -3606,7 +3643,7 @@ function getOrCreateModelEntity(art, targetIndex, targetEl) {
   const isGltf = art.modelObj.match(/\.(glb|gltf)$/i);
   if (isGltf) {
     modelEl.setAttribute("gltf-model", art.modelObj);
-    modelEl.setAttribute("animation-mixer", "clip: *; loop: repeat");
+    modelEl.setAttribute("animation-mixer", `clip: ${art.animationClip || "*"}; loop: repeat`);
   } else {
     modelEl.setAttribute(
       "obj-model",
@@ -5614,7 +5651,7 @@ immersiveContainer.innerHTML = `
            spinning the camera away from it. -->
       <a-entity camera look-controls="touchEnabled: false; mouseEnabled: false; magicWindowTrackingEnabled: true" position="0 1.6 0"></a-entity>
       <a-entity gltf-model="${art.immersiveSkybox}" position="0 0 0" scale="100 100 100"></a-entity>
-      <a-entity gltf-model="${art.modelObj}" animation-mixer="clip: *; loop: repeat" position="0 0 ${art.immersiveForward ?? -3}" rotation="${art.immersiveRotation || '0 0 0'}" scale="${art.immersiveScale || art.baseScale || 1} ${art.immersiveScale || art.baseScale || 1} ${art.immersiveScale || art.baseScale || 1}"></a-entity>
+      <a-entity gltf-model="${art.modelObj}" animation-mixer="clip: ${art.animationClip || "*"}; loop: repeat" position="0 0 ${art.immersiveForward ?? -3}" rotation="${art.immersiveRotation || '0 0 0'}" scale="${art.immersiveScale || art.baseScale || 1} ${art.immersiveScale || art.baseScale || 1} ${art.immersiveScale || art.baseScale || 1}"></a-entity>
       <a-light type="ambient" color="#ffffff" intensity="0.6"></a-light>
       <a-light type="directional" color="#ffffff" intensity="0.4" position="-1 2 1"></a-light>
     </a-scene>
