@@ -1135,6 +1135,11 @@ btnAiSubmit.addEventListener("click", async () => {
 // STATS
 // =====================================================================
 const STATS_DAY_MS = 24 * 60 * 60 * 1000;
+// Raw visits are kept for a little over a year so the "All Time" tab (which
+// draws twelve month bars) can never lose a month it is still showing. A year of
+// visits is only a few thousand tiny records, and the extras beyond that are
+// what the prune in loadVisitData() removes.
+const VISIT_RETENTION_DAYS = 400;
 let cachedVisitTimestamps = [];
 let visitDataError = false;
 let currentVisitsRange = "week";
@@ -1233,15 +1238,34 @@ async function loadVisitData() {
     const res = await fetch(`${FIREBASE_URL}/analytics_visits.json${authParam}`);
     if (!res.ok) throw new Error(`analytics_visits: ${res.status} ${await res.text()}`);
     const data = await res.json();
-    cachedVisitTimestamps = data
-      ? Object.values(data).map((v) => v && v.timestamp).filter((t) => Number.isFinite(t))
-      : [];
+    // The chart above only ever draws twelve months of bars, so a full year of
+    // raw visits is kept and everything older is dropped. Pruning is a single
+    // multi-path PATCH (one request, whatever the number of stale records)
+    // instead of one DELETE per record, and the list is filtered before it is
+    // cached so the numbers on screen already match what is left in Firebase.
+    const staleCutoff = Date.now() - VISIT_RETENTION_DAYS * STATS_DAY_MS;
+    const visitTimestamp = (value) => Number(value && value.timestamp);
+    const entries = data ? Object.entries(data) : [];
 
-    const staleCutoff = Date.now() - 35 * STATS_DAY_MS;
-    const staleEntries = data ? Object.entries(data).filter(([, v]) => v && v.timestamp < staleCutoff) : [];
-    for (const [key] of staleEntries) {
-      const authParam2 = user ? `?auth=${await user.getIdToken()}` : "";
-      fetch(`${FIREBASE_URL}/analytics_visits/${key}.json${authParam2}`, { method: "DELETE" }).catch(() => {});
+    cachedVisitTimestamps = entries
+      .map(([, value]) => visitTimestamp(value))
+      .filter((t) => Number.isFinite(t) && t >= staleCutoff);
+
+    // A record with no usable timestamp is left alone: it cannot be placed on the
+    // chart, but it is not ours to throw away.
+    const staleKeys = entries
+      .filter(([, value]) => {
+        const ts = visitTimestamp(value);
+        return Number.isFinite(ts) && ts < staleCutoff;
+      })
+      .map(([key]) => key);
+
+    if (staleKeys.length) {
+      fetch(`${FIREBASE_URL}/analytics_visits.json${authParam}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(Object.fromEntries(staleKeys.map((key) => [key, null]))),
+      }).catch(() => {});
     }
   } catch (err) {
     cachedVisitTimestamps = [];
