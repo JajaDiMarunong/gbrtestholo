@@ -223,14 +223,14 @@ async function loadStats() {
 function fitBoardToViewport() {
   const wrapW = notesBoardWrap.clientWidth;
   const wrapH = notesBoardWrap.clientHeight;
-  const boardHeight = getNotesBoardHeight(allNotesCache.length);
-  notesBoard.style.width = `${BOARD_WIDTH}px`;
-  notesBoard.style.height = `${boardHeight}px`;
-  const scaleX = wrapW / BOARD_WIDTH;
-  const scaleY = wrapH / boardHeight;
+  const grid = getNotesBoardGrid(allNotesCache.length);
+  notesBoard.style.width = `${grid.width}px`;
+  notesBoard.style.height = `${grid.height}px`;
+  const scaleX = wrapW / grid.width;
+  const scaleY = wrapH / grid.height;
   boardScale = Math.min(scaleX, scaleY, 1);
-  boardX = Math.max(0, (wrapW - BOARD_WIDTH * boardScale) / 2);
-  boardY = Math.max(0, (wrapH - boardHeight * boardScale) / 2);
+  boardX = Math.max(0, (wrapW - grid.width * boardScale) / 2);
+  boardY = Math.max(0, (wrapH - grid.height * boardScale) / 2);
   applyBoardTransform();
 }
 
@@ -292,6 +292,16 @@ const NOTES_BASE_ROWS = 4;      // rows kept on the board even when it is empty
 const NOTE_MAX_JITTER = 26;     // px a note may drift around its slot
 const NOTE_JITTER_SAFETY = 2;   // px kept free so slots never touch
 const NOTE_MAX_ROTATION = 8;    // degrees of "hand pinned" tilt
+// Notes never sit on top of each other's paper: the packed columns still leave
+// a real gap and the rows keep at least NOTE_MIN_ROW_GAP, which is exactly what
+// the ±8° tilt needs so a corner only ever grazes a neighbour by a pixel or two.
+const NOTE_MIN_ROW_GAP = 14;
+// The corkboard slot the TV view is designed for. Big guestbooks add columns
+// until the board is as close to this shape as it can get, which keeps 80+ notes
+// wide and short (big on screen) instead of tall, narrow and tiny.
+const BOARD_TARGET_WIDTH = 1400;
+const BOARD_TARGET_HEIGHT = 880;
+const BOARD_MAX_HEIGHT = 1900;  // past this the rows squeeze instead of growing
 
 let noteSlotOrderCache = { key: "", order: [] };
 
@@ -319,39 +329,75 @@ function clampNumber(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-function getNotesBoardColumns() {
-  const usableWidth = BOARD_WIDTH - BOARD_PADDING * 2;
-  return Math.max(1, Math.floor((usableWidth + MIN_NOTE_GAP) / (NOTE_W + MIN_NOTE_GAP)));
-}
-
-function getNotesBoardHorizontalGap() {
-  const columns = getNotesBoardColumns();
-  if (columns <= 1) return 0;
-  const usableWidth = BOARD_WIDTH - BOARD_PADDING * 2;
-  return (usableWidth - columns * NOTE_W) / (columns - 1);
-}
-
-function getNotesBoardRows(noteCount) {
-  // Keep enough rows to fill the default board so a handful of notes still
-  // scatters over the whole corkboard instead of hugging one line.
-  return Math.max(NOTES_BASE_ROWS, Math.ceil(Math.max(1, noteCount) / getNotesBoardColumns()));
-}
-
-function getNotesBoardHeight(noteCount) {
-  const rows = getNotesBoardRows(noteCount);
-  return Math.max(
-    BOARD_HEIGHT,
-    BOARD_PADDING * 2 + rows * NOTE_H + (rows - 1) * NOTE_MARGIN
+function getNoteRowGap(rows) {
+  if (rows <= 1) return NOTE_MARGIN;
+  return clampNumber(
+    (BOARD_MAX_HEIGHT - BOARD_PADDING * 2 - rows * NOTE_H) / (rows - 1),
+    NOTE_MIN_ROW_GAP,
+    NOTE_MARGIN
   );
 }
 
-function getShuffledNoteSlots(rows) {
-  const columns = getNotesBoardColumns();
-  const cacheKey = `${rows}x${columns}`;
+function getBoardSizeForColumns(columns, rows) {
+  return {
+    width: Math.max(
+      BOARD_WIDTH,
+      BOARD_PADDING * 2 + columns * NOTE_W + (columns - 1) * MIN_NOTE_GAP
+    ),
+    height: Math.max(
+      BOARD_HEIGHT,
+      BOARD_PADDING * 2 + rows * NOTE_H + (rows - 1) * getNoteRowGap(rows)
+    ),
+  };
+}
+
+// One grid decides where the slots live. A quiet guestbook gets roomy gaps; a
+// full one adds columns, which keeps the board wide and short so 80+ notes stay
+// as big on screen as the note size allows.
+function getNotesBoardGrid(noteCount) {
+  const count = Math.max(1, noteCount || 0);
+  const usableWidth = BOARD_WIDTH - BOARD_PADDING * 2;
+  const baseColumns = Math.max(
+    1,
+    Math.floor((usableWidth + MIN_NOTE_GAP) / (NOTE_W + MIN_NOTE_GAP))
+  );
+
+  let columns = baseColumns;
+  let bestScale = 0;
+  const maxColumns = Math.min(count, 48);
+  for (let candidate = baseColumns; candidate <= maxColumns; candidate++) {
+    const rows = Math.max(NOTES_BASE_ROWS, Math.ceil(count / candidate));
+    const { width, height } = getBoardSizeForColumns(candidate, rows);
+    const scale = Math.min(
+      BOARD_TARGET_WIDTH / width,
+      BOARD_TARGET_HEIGHT / height,
+      1
+    );
+    // A 2% band keeps the board from going needlessly wide for a hair of scale.
+    if (scale > bestScale + 0.02) {
+      bestScale = scale;
+      columns = candidate;
+    }
+  }
+
+  const rows = Math.max(NOTES_BASE_ROWS, Math.ceil(count / columns));
+  const { width, height } = getBoardSizeForColumns(columns, rows);
+  const gapX =
+    columns > 1 ? (width - BOARD_PADDING * 2 - columns * NOTE_W) / (columns - 1) : 0;
+  const gapY = getNoteRowGap(rows);
+  return { columns, rows, gapX, gapY, width, height };
+}
+
+function getNotesBoardHeight(noteCount) {
+  return getNotesBoardGrid(noteCount).height;
+}
+
+function getShuffledNoteSlots(grid) {
+  const cacheKey = `${grid.rows}x${grid.columns}`;
   if (noteSlotOrderCache.key === cacheKey) return noteSlotOrderCache.order;
 
   const random = mulberry32(hashString(`guestbook-slots|${cacheKey}`) ^ LAYOUT_SEED);
-  const order = Array.from({ length: rows * columns }, (_, i) => i);
+  const order = Array.from({ length: grid.rows * grid.columns }, (_, i) => i);
   for (let i = order.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1));
     const temp = order[i];
@@ -362,12 +408,10 @@ function getShuffledNoteSlots(rows) {
   return order;
 }
 
-function getNoteSlotPosition(slotIndex) {
-  const columns = getNotesBoardColumns();
-  const gap = getNotesBoardHorizontalGap();
+function getNoteSlotPosition(slotIndex, grid) {
   return {
-    x: BOARD_PADDING + (slotIndex % columns) * (NOTE_W + gap),
-    y: BOARD_PADDING + Math.floor(slotIndex / columns) * (NOTE_H + NOTE_MARGIN),
+    x: BOARD_PADDING + (slotIndex % grid.columns) * (NOTE_W + grid.gapX),
+    y: BOARD_PADDING + Math.floor(slotIndex / grid.columns) * (NOTE_H + grid.gapY),
   };
 }
 
@@ -399,38 +443,36 @@ function getNoteExpansion(rotation) {
   };
 }
 
-function getNoteJitterLimit(rotation) {
+function getNoteJitterLimit(rotation, grid) {
   const expansion = getNoteExpansion(rotation);
-  const gap = getNotesBoardHorizontalGap();
   return {
-    x: Math.max(0, Math.min(NOTE_MAX_JITTER, (gap - expansion.x) / 2 - NOTE_JITTER_SAFETY)),
-    y: Math.max(0, Math.min(NOTE_MAX_JITTER, (NOTE_MARGIN - expansion.y) / 2 - NOTE_JITTER_SAFETY)),
+    x: Math.max(0, Math.min(NOTE_MAX_JITTER, (grid.gapX - expansion.x) / 2 - NOTE_JITTER_SAFETY)),
+    y: Math.max(0, Math.min(NOTE_MAX_JITTER, (grid.gapY - expansion.y) / 2 - NOTE_JITTER_SAFETY)),
   };
 }
 
 function buildNotesLayout(notes) {
-  const rows = getNotesBoardRows(notes.length);
-  const slotOrder = getShuffledNoteSlots(rows);
-  const boardHeight = getNotesBoardHeight(notes.length);
+  const grid = getNotesBoardGrid(notes.length);
+  const slotOrder = getShuffledNoteSlots(grid);
 
   return notes.map((note, index) => {
-    const slot = getNoteSlotPosition(slotOrder[index]);
+    const slot = getNoteSlotPosition(slotOrder[index], grid);
     const random = mulberry32(getNoteSeed(note));
     const rotation = getNoteRotation(note, random);
     const expansion = getNoteExpansion(rotation);
-    const jitter = getNoteJitterLimit(rotation);
+    const jitter = getNoteJitterLimit(rotation, grid);
 
     // Keep the drift inside the note's own slot, so neighbouring notes can
-    // never be covered even when the board is completely full.
+    // only ever graze their padding — never each other's text.
     const x = clampNumber(
       slot.x + (random() * 2 - 1) * jitter.x,
       expansion.x / 2,
-      BOARD_WIDTH - NOTE_W - expansion.x / 2
+      grid.width - NOTE_W - expansion.x / 2
     );
     const y = clampNumber(
       slot.y + (random() * 2 - 1) * jitter.y,
       expansion.y / 2,
-      boardHeight - NOTE_H - expansion.y / 2
+      grid.height - NOTE_H - expansion.y / 2
     );
     return { x, y, rotation };
   });
@@ -456,7 +498,7 @@ function renderNotesBoard() {
     el.style.setProperty("--rot", pos.rotation + "deg");
     el.style.transform = `rotate(${pos.rotation}deg)`;
     if (note.type !== "photo") el.style.background = note.color || "#f4d35e";
-    el.style.animationDelay = (idx * 0.05) + "s";
+    el.style.animationDelay = Math.min(idx, 24) / 20 + "s";
 
     if (note.type === "photo") {
       el.innerHTML = `<img class="note-sticky-photo" src="${note.photo}" alt="photo" />`;

@@ -2547,35 +2547,177 @@ async function submitLeaderboardEntry(name, timeSeconds) {
 const NOTE_COLORS = ["#f4d35e", "#f2a19b", "#a8d5ba", "#9fc6e0", "#c9a8d8", "#f4f1ea"];
 const BOARD_WIDTH = 1200;
 const BOARD_HEIGHT = 800;
-const NOTE_W = 140;
-const NOTE_H = 160;
-const NOTE_MARGIN = 36;
+// .note-sticky is 92x92 in style.css — keep the layout box in sync with it.
+const NOTE_W = 92;
+const NOTE_H = 92;
 const MIN_NOTE_GAP = 24;
+const NOTE_MARGIN = 36;
 const BOARD_PADDING = 30;
+const NOTES_BASE_ROWS = 6;      // rows kept on the board even when it is empty
+const NOTE_MAX_JITTER = 14;     // px a note may drift around its slot
+const NOTE_JITTER_SAFETY = 1;   // px kept free so slots never touch
+const NOTE_MAX_ROTATION = 8;    // degrees of "hand pinned" tilt
+// Notes never sit on top of each other's paper: the packed columns still leave a
+// real gap and the rows keep at least NOTE_MIN_ROW_GAP, which is what the ±8°
+// tilt needs so a corner only ever grazes a neighbour by a pixel or two.
+const NOTE_MIN_ROW_GAP = 12;
+const BOARD_MAX_HEIGHT = 1100;  // past this the rows squeeze instead of growing
+const LAYOUT_SEED = 0x6d2b79f5;
 let allNotesCache = [];
 let boardScale = 1;
 let boardX = 0;
 let boardY = 0;
+let noteSlotOrderCache = { key: "", order: [] };
 
-function getNotesBoardColumns() {
-  const usableWidth = BOARD_WIDTH - BOARD_PADDING * 2;
-  return Math.max(1, Math.floor((usableWidth + MIN_NOTE_GAP) / (NOTE_W + MIN_NOTE_GAP)));
+// -------------------------------------------------------------------
+// Post-it scatter layout
+// -------------------------------------------------------------------
+// Notes drop into an invisible grid of slots so a note never lands on top of
+// an older one, then each one is nudged and tilted by a small seeded amount.
+// The seed comes from the note owner, so a note keeps its spot across
+// refreshes instead of dancing around.
+function hashString(value) {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
 }
 
-function getNotesBoardHorizontalGap() {
-  const columns = getNotesBoardColumns();
-  if (columns <= 1) return 0;
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function clampNumber(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getNotesBoardGrid(noteCount) {
+  const count = Math.max(1, noteCount || 0);
   const usableWidth = BOARD_WIDTH - BOARD_PADDING * 2;
-  return (usableWidth - columns * NOTE_W) / (columns - 1);
+  const roomyColumns = Math.max(
+    1,
+    Math.floor((usableWidth + MIN_NOTE_GAP) / (NOTE_W + MIN_NOTE_GAP))
+  );
+  const packedColumns = Math.max(roomyColumns, Math.floor(usableWidth / NOTE_W));
+  // Only take the tighter column count when it really saves a row.
+  const roomyRows = Math.max(NOTES_BASE_ROWS, Math.ceil(count / roomyColumns));
+  const packedRows = Math.max(NOTES_BASE_ROWS, Math.ceil(count / packedColumns));
+  const columns = packedRows < roomyRows ? packedColumns : roomyColumns;
+  const rows = Math.max(NOTES_BASE_ROWS, Math.ceil(count / columns));
+  const gapX = columns > 1 ? (usableWidth - columns * NOTE_W) / (columns - 1) : 0;
+  const gapY =
+    rows > 1
+      ? clampNumber(
+          (BOARD_MAX_HEIGHT - BOARD_PADDING * 2 - rows * NOTE_H) / (rows - 1),
+          NOTE_MIN_ROW_GAP,
+          NOTE_MARGIN
+        )
+      : NOTE_MARGIN;
+  const height = Math.max(
+    BOARD_HEIGHT,
+    BOARD_PADDING * 2 + rows * NOTE_H + (rows - 1) * gapY
+  );
+  return { columns, rows, gapX, gapY, height };
 }
 
 function getNotesBoardHeight(noteCount) {
-  const rows = Math.max(1, Math.ceil(noteCount / getNotesBoardColumns()));
-  return Math.max(
-    BOARD_HEIGHT,
-    BOARD_PADDING * 2 + rows * NOTE_H + (rows - 1) * NOTE_MARGIN
-  );
+  return getNotesBoardGrid(noteCount).height;
 }
+
+function getShuffledNoteSlots(grid) {
+  const cacheKey = `${grid.rows}x${grid.columns}`;
+  if (noteSlotOrderCache.key === cacheKey) return noteSlotOrderCache.order;
+
+  const random = mulberry32(hashString(`guestbook-slots|${cacheKey}`) ^ LAYOUT_SEED);
+  const order = Array.from({ length: grid.rows * grid.columns }, (_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    const temp = order[i];
+    order[i] = order[j];
+    order[j] = temp;
+  }
+  noteSlotOrderCache = { key: cacheKey, order };
+  return order;
+}
+
+function getNoteSlotPosition(slotIndex, grid) {
+  return {
+    x: BOARD_PADDING + (slotIndex % grid.columns) * (NOTE_W + grid.gapX),
+    y: BOARD_PADDING + Math.floor(slotIndex / grid.columns) * (NOTE_H + grid.gapY),
+  };
+}
+
+function getNoteSeed(note) {
+  const key = note.ownerId || note.id;
+  const stableKey = key ? `note:${key}` : `note:${note.timestamp || 0}`;
+  return hashString(stableKey) ^ LAYOUT_SEED;
+}
+
+function getNoteRotation(note, random) {
+  // The note editor already saves a random tilt — keep it so the phone and the
+  // TV show the same sheet of paper. Older notes get a seeded tilt instead.
+  const saved = Number(note.rotation);
+  if (Number.isFinite(saved) && Math.abs(saved) >= 1) {
+    return clampNumber(saved, -NOTE_MAX_ROTATION, NOTE_MAX_ROTATION);
+  }
+  const tilt = NOTE_MAX_ROTATION * (random() * 2 - 1);
+  return tilt >= 0 ? Math.max(1.5, tilt) : Math.min(-1.5, tilt);
+}
+
+// How much wider/taller a tilted note becomes around its untilted box. This is
+// what decides how far a note may drift without covering a neighbour.
+function getNoteExpansion(rotation) {
+  const radians = (Math.abs(rotation) * Math.PI) / 180;
+  return {
+    x: NOTE_W * Math.cos(radians) + NOTE_H * Math.sin(radians) - NOTE_W,
+    y: NOTE_W * Math.sin(radians) + NOTE_H * Math.cos(radians) - NOTE_H,
+  };
+}
+
+function getNoteJitterLimit(rotation, grid) {
+  const expansion = getNoteExpansion(rotation);
+  return {
+    x: Math.max(0, Math.min(NOTE_MAX_JITTER, (grid.gapX - expansion.x) / 2 - NOTE_JITTER_SAFETY)),
+    y: Math.max(0, Math.min(NOTE_MAX_JITTER, (grid.gapY - expansion.y) / 2 - NOTE_JITTER_SAFETY)),
+  };
+}
+
+function buildNotesLayout(notes) {
+  const grid = getNotesBoardGrid(notes.length);
+  const slotOrder = getShuffledNoteSlots(grid);
+
+  return notes.map((note, index) => {
+    const slot = getNoteSlotPosition(slotOrder[index], grid);
+    const random = mulberry32(getNoteSeed(note));
+    const rotation = getNoteRotation(note, random);
+    const expansion = getNoteExpansion(rotation);
+    const jitter = getNoteJitterLimit(rotation, grid);
+
+    // Keep the drift inside the note's own slot, so neighbouring notes can
+    // only ever graze their padding — never each other's text.
+    const x = clampNumber(
+      slot.x + (random() * 2 - 1) * jitter.x,
+      expansion.x / 2,
+      BOARD_WIDTH - NOTE_W - expansion.x / 2
+    );
+    const y = clampNumber(
+      slot.y + (random() * 2 - 1) * jitter.y,
+      expansion.y / 2,
+      grid.height - NOTE_H - expansion.y / 2
+    );
+    return { x, y, rotation };
+  });
+}
+// ---- end post-it scatter layout ----
 
 function fitNotesBoardToViewport() {
   const wrapW = notesBoardWrap.clientWidth;
@@ -2616,15 +2758,6 @@ async function loadNotesBoard() {
   }
 }
 
-function getNoteBoardPosition(index) {
-  const columns = getNotesBoardColumns();
-  const gap = getNotesBoardHorizontalGap();
-  return {
-    x: BOARD_PADDING + (index % columns) * (NOTE_W + gap),
-    y: BOARD_PADDING + Math.floor(index / columns) * (NOTE_H + NOTE_MARGIN),
-  };
-}
-
 function getCurrentNoteOwnerId() {
   return firebase.auth().currentUser?.uid || null;
 }
@@ -2644,8 +2777,12 @@ function renderNotesBoard() {
     (a, b) => (a.timestamp || 0) - (b.timestamp || 0) || a.ownerId.localeCompare(b.ownerId)
   );
 
+  // Recompute the scatter every render: the per-note seed keeps each note in
+  // the same spot, so refreshing the board never reshuffles it.
+  const layout = buildNotesLayout(notesForDisplay);
+
   notesForDisplay.forEach((note, index) => {
-    const pos = getNoteBoardPosition(index);
+    const pos = layout[index];
     note.x = pos.x;
     note.y = pos.y;
 
@@ -2654,10 +2791,10 @@ function renderNotesBoard() {
       "note-sticky" +
       (note.type === "photo" ? " type-photo" : "") +
       (isMyNote(note) ? " mine" : "");
-    el.style.left = note.x + "px";
-    el.style.top = note.y + "px";
+    el.style.left = pos.x + "px";
+    el.style.top = pos.y + "px";
     if (note.type !== "photo") el.style.background = note.color || NOTE_COLORS[0];
-    el.style.transform = `rotate(${note.rotation || 0}deg)`;
+    el.style.transform = `rotate(${pos.rotation}deg)`;
 
     if (note.type === "photo") {
       el.innerHTML = `<img class="note-sticky-photo" src="${note.photo}" alt="photo" />`;
