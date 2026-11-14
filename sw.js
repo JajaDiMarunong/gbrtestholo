@@ -1,7 +1,7 @@
 importScripts("./asset-manifest.js");
 
-const CACHE_NAME = "gbr-museum-assets-v62";
-const DATA_CACHE = "gbr-museum-runtime-v62";
+const CACHE_NAME = "gbr-museum-assets-v63";
+const DATA_CACHE = "gbr-museum-runtime-v63";
 
 // reCAPTCHA v3 (recaptcha.js) needs google.com for its loader script, its
 // hidden anchor iframe and its badge image; siteverify itself is called from
