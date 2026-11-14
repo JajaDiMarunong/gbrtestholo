@@ -406,15 +406,104 @@ let currentUsername = null;
 let sessionStartTime = null;
 let finalElapsedSeconds = null;
 let leaderboardSubmitted = false;
+let recoveredProgress = null;
+let lastProgressSaveFailed = false;
+let deviceProgressMirrorOk = false;
 const PROGRESS_STORAGE_KEY = "museum_progress_v1";
+const PROGRESS_BACKUP_KEY = "museum_progress_v1_backup";
 
-function readStoredProgress() {
+function parseStoredProgress(raw) {
+  if (!raw) return null;
   try {
-    const parsed = JSON.parse(localStorage.getItem(PROGRESS_STORAGE_KEY) || "null");
+    const parsed = JSON.parse(raw);
     return parsed && typeof parsed === "object" ? parsed : null;
   } catch (_) {
     return null;
   }
+}
+
+function readLocalProgressValue(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch (_) {
+    return null;
+  }
+}
+
+function clearLocalProgressValue(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch (_) {
+  }
+}
+
+function readStoredProgress() {
+  return parseStoredProgress(readLocalProgressValue(PROGRESS_STORAGE_KEY))
+    || parseStoredProgress(readLocalProgressValue(PROGRESS_BACKUP_KEY));
+}
+
+function freeLocalStorageForProgress() {
+  clearLocalProgressValue(PROGRESS_BACKUP_KEY);
+  clearLocalProgressValue("museum_learn_cache_v1");
+}
+
+function writeLocalProgress(serialized) {
+  try {
+    const previous = localStorage.getItem(PROGRESS_STORAGE_KEY);
+    if (previous) localStorage.setItem(PROGRESS_BACKUP_KEY, previous);
+    localStorage.setItem(PROGRESS_STORAGE_KEY, serialized);
+    return true;
+  } catch (error) {
+    console.warn("Could not save museum progress:", error);
+  }
+  freeLocalStorageForProgress();
+  try {
+    localStorage.setItem(PROGRESS_STORAGE_KEY, serialized);
+    return true;
+  } catch (error) {
+    console.warn("Could not save museum progress after clearing space:", error);
+    return false;
+  }
+}
+
+function mirrorProgressOntoDevice(progress) {
+  const store = window.MuseumOffline && window.MuseumOffline.progress;
+  if (!store || typeof store.save !== "function") return;
+  try {
+    Promise.resolve(store.save(progress)).then(() => {
+      deviceProgressMirrorOk = true;
+    }, (error) => {
+      deviceProgressMirrorOk = false;
+      console.warn("Could not mirror museum progress onto this device:", error);
+    });
+  } catch (error) {
+    deviceProgressMirrorOk = false;
+    console.warn("Could not mirror museum progress onto this device:", error);
+  }
+}
+
+async function recoverProgressFromDevice() {
+  if (readStoredProgress()) return false;
+  const store = window.MuseumOffline && window.MuseumOffline.progress;
+  if (!store || typeof store.load !== "function") return false;
+  let saved = null;
+  try {
+    saved = await Promise.race([
+      store.load(),
+      new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
+    ]);
+  } catch (error) {
+    console.warn("Could not read the saved museum progress from this device:", error);
+    return false;
+  }
+  if (!saved || typeof saved !== "object") return false;
+  recoveredProgress = saved;
+  try {
+    localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(saved));
+  } catch (error) {
+    console.warn("Kept the recovered museum progress in memory only:", error);
+  }
+  return true;
 }
 
 function persistProgress() {
@@ -447,17 +536,23 @@ function persistProgress() {
     leaderboardSubmitted: leaderboardSubmitted || Boolean(stored && stored.leaderboardSubmitted)
   };
 
+  let serialized = "";
   try {
-    localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progress));
-    return true;
+    serialized = JSON.stringify(progress);
   } catch (error) {
-    console.warn("Could not save museum progress:", error);
+    console.warn("Could not prepare museum progress for saving:", error);
+    lastProgressSaveFailed = true;
     return false;
   }
+
+  const savedLocally = writeLocalProgress(serialized);
+  lastProgressSaveFailed = !savedLocally;
+  mirrorProgressOntoDevice(progress);
+  return savedLocally;
 }
 
 function restoreProgress() {
-  const progress = readStoredProgress();
+  const progress = readStoredProgress() || recoveredProgress;
   if (!progress) return false;
   currentUsername = progress.username || null;
   sessionStartTime = progress.sessionStartTime || null;
@@ -986,18 +1081,25 @@ function renderAppVersionInfo() {
   if (settingsVersionText) settingsVersionText.textContent = appVersionLabel();
 }
 
+function progressStorageWarning() {
+  if (!lastProgressSaveFailed) return "";
+  if (deviceProgressMirrorOk) return "kept in the backup store only";
+  return "not saved — storage is full or blocked";
+}
+
 function renderSavedProgress() {
   if (!settingsProgressText) return;
-  const stored = readStoredProgress();
+  const stored = readStoredProgress() || recoveredProgress;
   const unlocked = stored && Array.isArray(stored.unlocked) ? stored.unlocked.length : 0;
   const quizzes = stored && Array.isArray(stored.quizCompleted) ? stored.quizCompleted.length : 0;
+  const warning = progressStorageWarning();
   if (!unlocked && !quizzes) {
-    settingsProgressText.textContent = "Nothing saved on this device yet";
+    settingsProgressText.textContent = warning || "Nothing saved on this device yet";
     return;
   }
   const pieces = `${unlocked} piece${unlocked === 1 ? "" : "s"} unlocked`;
   const quizText = quizzes ? ` · ${quizzes} ${quizzes === 1 ? "quiz" : "quizzes"} finished` : "";
-  settingsProgressText.textContent = `On this device: ${pieces}${quizText}`;
+  settingsProgressText.textContent = `On this device: ${pieces}${quizText}${warning ? ` · ${warning}` : ""}`;
 }
 
 async function checkForAppUpdates() {
@@ -5257,6 +5359,11 @@ async function runEntryGate() {
 
 async function bootMuseum() {
   try {
+    await recoverProgressFromDevice();
+    if (!currentUsername) {
+      const savedProgress = readStoredProgress() || recoveredProgress;
+      if (savedProgress && savedProgress.username) currentUsername = savedProgress.username;
+    }
     await runEntryGate();
 
     if (window.MuseumOffline) {

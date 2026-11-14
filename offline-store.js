@@ -4,6 +4,7 @@
   const DB_VERSION = 1;
   const DATA_STORE = "responses";
   const QUEUE_STORE = "queue";
+  const PROGRESS_KEY = "museum_progress";
   const ASSET_CACHE = "gbr-museum-assets-v10";
   const FIREBASE_HOST = "gbrmuseumtest-default-rtdb.asia-southeast1.firebasedatabase.app";
   const nativeFetch = window.fetch.bind(window);
@@ -80,6 +81,16 @@
   async function cachedJson(url) {
     const saved = await read(DATA_STORE, new URL(url, location.href).href);
     return saved ? saved.data : undefined;
+  }
+
+  async function saveProgress(progress) {
+    await write(DATA_STORE, { data: progress, updatedAt: Date.now() }, PROGRESS_KEY);
+    return true;
+  }
+
+  async function loadProgress() {
+    const saved = await read(DATA_STORE, PROGRESS_KEY);
+    return saved && saved.data && typeof saved.data === "object" ? saved.data : null;
   }
 
   async function applyQueuedChange(entry) {
@@ -258,7 +269,7 @@
     }, { passive: false });
   })();
 
-  window.MuseumOffline = { preloadAssets, flushQueue, cachedJson };
+  window.MuseumOffline = { preloadAssets, flushQueue, cachedJson, progress: { save: saveProgress, load: loadProgress } };
   window.addEventListener("online", () => flushQueue().catch(console.warn));
   window.addEventListener("load", () => {
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(console.warn);
