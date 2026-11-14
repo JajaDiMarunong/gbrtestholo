@@ -18,6 +18,7 @@ const BUILTIN_ARTWORKS = [
     location: "GBR Jr. Museum, General Trias, Philippines",
     details: "Portrait of Crisanto de los Reyes y Mendoza by Rafael del Casal.",
     baseScale: 0.063,
+    animationClip: "All_Models_Loop",
     icon: "🎨",
     hasModel: true,
     showInMainCollection: true,
@@ -61,6 +62,7 @@ const BUILTIN_ARTWORKS = [
       "Republic and stayed loyal to the cause through the Philippine–American War. He died on " +
       "February 22, 1914, and the municipality of General Trias, Cavite, keeps his memory alive in its name.",
     baseScale: 0.18,
+    animationClip: "All_Models_Loop",
     icon: "🏛️",
     hasModel: true,
     showInMainCollection: true,
@@ -137,6 +139,8 @@ const artworkModelInput = document.getElementById("artwork-model");
 const artworkSkyboxInput = document.getElementById("artwork-skybox");
 const artworkModelScaleInput = document.getElementById("artwork-model-scale");
 const artworkModelForwardInput = document.getElementById("artwork-model-forward");
+const artworkAnimationClipInput = document.getElementById("artwork-animation-clip");
+const artworkAnimationLoopInput = document.getElementById("artwork-animation-loop");
 const artworkImmersiveScaleInput = document.getElementById("artwork-immersive-scale");
 const artworkImmersiveRotationInput = document.getElementById("artwork-immersive-rotation");
 const artworkImmersiveForwardInput = document.getElementById("artwork-immersive-forward");
@@ -2161,6 +2165,8 @@ function resetArtworkForm() {
   artworkSkyboxInput.value = "";
   artworkModelScaleInput.value = "0.5";
   artworkModelForwardInput.value = "0.1";
+  artworkAnimationClipInput.value = "";
+  artworkAnimationLoopInput.value = "repeat";
   artworkImmersiveScaleInput.value = "1";
   artworkImmersiveRotationInput.value = "0 0 0";
   artworkImmersiveForwardInput.value = "-3";
@@ -2192,6 +2198,8 @@ async function startArtworkSettingsEdit(art) {
   document.getElementById("artwork-details").value = art.details || "";
   artworkModelScaleInput.value = numberOrDefault(art.baseScale, 0.5);
   artworkModelForwardInput.value = numberOrDefault(art.modelPositionZ, 0.1);
+  artworkAnimationClipInput.value = art.animationClip || "";
+  artworkAnimationLoopInput.value = art.animationLoop || "repeat";
   artworkImmersiveScaleInput.value = numberOrDefault(art.immersiveScale, 1);
   artworkImmersiveRotationInput.value = art.immersiveRotation || "0 0 0";
   artworkImmersiveForwardInput.value = numberOrDefault(art.immersiveForward, -3);
@@ -2739,6 +2747,8 @@ btnUploadArtwork.addEventListener("click", async () => {
         immersiveScale,
         immersiveRotation,
         immersiveForward,
+        animationClip: artworkAnimationClipInput.value.trim() || null,
+        animationLoop: artworkAnimationLoopInput.value || "repeat",
         showInMainCollection: artworkMainInput.checked,
         scannable: artworkScannableInput.checked,
         published: artworkPublishedInput.checked,
@@ -2835,6 +2845,8 @@ const artwork = {
       immersiveScale: numberOrDefault(artworkImmersiveScaleInput.value, 1),
       immersiveRotation: artworkImmersiveRotationInput.value.trim() || "0 0 0",
       immersiveForward: numberOrDefault(artworkImmersiveForwardInput.value, -3),
+      animationClip: artworkAnimationClipInput.value.trim() || null,
+      animationLoop: artworkAnimationLoopInput.value || "repeat",
       icon: "🖼️",
       showInMainCollection: artworkMainInput.checked,
       scannable: artworkScannableInput.checked,
