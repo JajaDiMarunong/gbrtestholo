@@ -645,7 +645,7 @@ svg { display: block; }
 
 .analytics-grid { display: grid; gap: 14px; }
 .analytics-grid-main { grid-template-columns: minmax(0, 1.9fr) minmax(280px, 0.85fr); margin-bottom: 14px; }
-.analytics-grid-secondary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.analytics-grid-secondary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 /* ---------------- Visits chart ---------------- */
 .visits-filter { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
@@ -761,38 +761,7 @@ svg { display: block; }
 .insight-list span { color: var(--muted); }
 .insight-list strong { color: var(--text); font-weight: 650; text-align: right; font-variant-numeric: tabular-nums; }
 
-/* ---------------- Funnel / mix / readiness ---------------- */
-.funnel-layout { display: flex; align-items: center; gap: 22px; }
-.donut {
-  --pct: 0;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 138px;
-  height: 138px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: conic-gradient(var(--gold) calc(var(--pct) * 1%), rgba(255, 255, 255, 0.07) 0);
-}
-.donut::before {
-  content: "";
-  position: absolute;
-  inset: 13px;
-  border-radius: 50%;
-  background: var(--surface);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-}
-.donut-center { position: relative; z-index: 1; text-align: center; }
-.donut-center strong { display: block; font-size: 25px; font-weight: 650; line-height: 1.1; }
-.donut-center span { color: var(--muted-2); font-size: 9px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; }
-.legend-list { display: flex; flex: 1; flex-direction: column; gap: 11px; min-width: 0; }
-.legend-item { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 11.5px; }
-.legend-item strong { margin-left: auto; color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
-.legend-dot { width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; }
-.legend-dot.gold { background: var(--gold); }
-.legend-dot.muted { background: var(--muted-2); }
-.legend-dot.green { background: var(--success); }
+/* ---------------- Note mix / readiness ---------------- */
 
 .mix-list { display: flex; flex-direction: column; gap: 15px; }
 .mix-row-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 6px; color: var(--muted); font-size: 11.5px; }
@@ -1437,8 +1406,6 @@ body.drawer-open { overflow: hidden; }
   .visits-chart-bar-label { font-size: 8.5px; }
   .panel-insights .insight-list { grid-template-columns: 1fr; }
   .form-row { grid-template-columns: 1fr; gap: 0; }
-  .funnel-layout { flex-direction: column; align-items: flex-start; }
-  .legend-list { width: 100%; }
   .admin-row { flex-wrap: wrap; }
   .admin-row-actions { width: 100%; justify-content: flex-end; }
   .admin-note-preview { width: 72px; height: 82px; }

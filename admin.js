@@ -1140,6 +1140,11 @@ const STATS_DAY_MS = 24 * 60 * 60 * 1000;
 // visits is only a few thousand tiny records, and the extras beyond that are
 // what the prune in loadVisitData() removes.
 const VISIT_RETENTION_DAYS = 400;
+// Presence is a heartbeat, not history: a device that has not pinged for eight
+// hours is treated as gone and its record is deleted by loadActiveNow(). Without
+// that prune the tree keeps one permanent node for every browser that ever
+// opened the app, and the device count can only ever go up.
+const PRESENCE_RETENTION_MS = 8 * 60 * 60 * 1000;
 let cachedVisitTimestamps = [];
 let visitDataError = false;
 let currentVisitsRange = "week";
@@ -1190,12 +1195,41 @@ async function loadActiveNow() {
     const res = await fetch(`${FIREBASE_URL}/presence.json${authParam}`);
     const data = await res.json();
     const entries = data ? Object.entries(data) : [];
-    const activeCount = entries.filter(([, p]) => p && Date.now() - (p.timestamp || 0) < 60000).length;
+    const now = Date.now();
+    const activeCount = entries.filter(([, p]) => p && now - (p.timestamp || 0) < 60000).length;
     cachedKnownDevices = new Set(entries.map(([key]) => key));
     setStatText("stat-active-now", activeCount);
+    await pruneStalePresence(entries, authParam, now);
   } catch (err) {
     cachedKnownDevices = new Set();
     setStatText("stat-active-now", "—");
+  }
+}
+
+// Every heartbeat older than PRESENCE_RETENTION_MS is deleted, so a device that
+// left the museum stops counting as a known visitor instead of lingering in the
+// tree for ever. Deleting is one multi-path PATCH (a single request whatever the
+// number of stale devices), and the cached device list is only trimmed after
+// Firebase confirms the write so the numbers on screen match the database.
+async function pruneStalePresence(entries, authParam, now) {
+  const staleKeys = entries
+    .filter(([, value]) => {
+      const timestamp = Number(value && value.timestamp);
+      return Number.isFinite(timestamp) && timestamp > 0 && now - timestamp >= PRESENCE_RETENTION_MS;
+    })
+    .map(([key]) => key);
+  if (!staleKeys.length) return;
+  try {
+    const res = await fetch(`${FIREBASE_URL}/presence.json${authParam}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(Object.fromEntries(staleKeys.map((key) => [key, null]))),
+    });
+    if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+    staleKeys.forEach((key) => cachedKnownDevices.delete(key));
+    console.log(`[Admin] Deleted ${staleKeys.length} presence record(s) older than 8 hours.`);
+  } catch (err) {
+    console.warn("[Admin] Presence cleanup skipped:", err);
   }
 }
 
@@ -1287,7 +1321,6 @@ function renderAnalytics() {
   const weekVisits = visits.filter((t) => t >= weekStart).length;
   const previousWeekVisits = visits.filter((t) => t >= previousWeekStart && t < weekStart).length;
 
-  const noteCount = cachedNoteStats.length;
   const completionCount = cachedLeaderboardStats.length;
   const recentNoteCount = cachedNoteStats.filter(([, note]) => Number(note && note.timestamp) >= weekStart).length;
 
@@ -1374,19 +1407,6 @@ function renderAnalytics() {
     setStatText("insight-average-completion", "No completions yet");
     setStatText("insight-fastest-completion", "No completions yet");
   }
-
-  setStatText("journey-rate", `${completionRate}%`);
-  setStatText("journey-completed", completionCount);
-  setStatText("journey-visitors", visitorCount);
-  setStatText("journey-notes", noteCount);
-  const donut = document.getElementById("journey-donut");
-  if (donut) donut.style.setProperty("--pct", String(completionRate));
-  setStatText(
-    "journey-footnote",
-    visitorCount > 0
-      ? `Based on ${visitorCount} visitor device${visitorCount === 1 ? "" : "s"} seen across presence, completion, and guestbook records.`
-      : "No visitor devices have been recorded yet."
-  );
 
   const noteMix = { text: 0, draw: 0, photo: 0 };
   cachedNoteStats.forEach(([, note]) => {

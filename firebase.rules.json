@@ -23,7 +23,7 @@
     "presence": {
       ".read": "auth != null",
       "$deviceId": {
-        ".write": "auth != null && auth.uid === $deviceId"
+        ".write": "auth != null && (auth.uid === $deviceId || auth.token.admin === true || auth.uid === 'UzUYv8RIPoYS2vpMXtAQeBUt09E3')"
       }
     },
     "analytics_visits": {
