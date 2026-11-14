@@ -18,6 +18,32 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ---------------- kiosk input behaviour ----------------
+   A visitor resting a thumb on a postcard, an artwork photo or a name tag
+   must not be handed the browser's own menu ("Open image in new tab",
+   "Save image as…", "Copy", "Search Google for…"). Turning selection off
+   removes the long-press selection and its callout on Android;
+   -webkit-touch-callout removes the iOS image/link sheet; the script also
+   cancels the remaining contextmenu event and image drags. Text fields get
+   their native behaviour back in the last rule, so typing, pasting and
+   password managers keep working. */
+body {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+img, video, canvas, svg, a[href] {
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+}
+
+input, textarea, select, [contenteditable]:not([contenteditable="false"]) {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
 html, body {
   width: 100vw; height: 100vh;
   overflow: hidden;

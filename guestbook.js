@@ -16,6 +16,41 @@ const BOARD_PADDING = 30;
 const REFRESH_INTERVAL = 5; // seconds
 
 // -------------------------------------------------------------------
+// Browser menus
+// A visitor resting a thumb on a note, an artwork photo or a name tag must
+// not be offered the browser's own menu ("Open image in new tab", "Save
+// image as…", "Copy"). The stylesheet removes long-press selection and the
+// iOS callout sheet; this cancels the remaining `contextmenu` event
+// (right-click and desktop long-press) and image drags. Text fields keep
+// their native menu so pasting and password managers still work.
+// -------------------------------------------------------------------
+const NATIVE_MENU_TARGETS =
+  "input, textarea, select, [contenteditable]:not([contenteditable='false'])";
+
+function keepsNativeMenu(target) {
+  return target instanceof Element && target.closest(NATIVE_MENU_TARGETS) !== null;
+}
+
+document.addEventListener(
+  "contextmenu",
+  (event) => {
+    if (keepsNativeMenu(event.target)) return;
+    event.preventDefault();
+  },
+  { capture: true }
+);
+
+document.addEventListener(
+  "dragstart",
+  (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target || keepsNativeMenu(target)) return;
+    if (target.closest("img, canvas, svg, a[href]")) event.preventDefault();
+  },
+  { capture: true }
+);
+
+// -------------------------------------------------------------------
 // DOM refs
 // -------------------------------------------------------------------
 const notesBoardWrap = document.getElementById("notes-board-wrap");
