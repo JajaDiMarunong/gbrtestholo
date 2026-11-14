@@ -2175,7 +2175,20 @@ function shuffleQuizOptions(count, random) {
 function buildQuizOptionOrders(art) {
   const seed = hashString(`quiz-order|${art.id}|${getQuizSeed()}|${quizAttempt}`) ^ QUIZ_ORDER_SALT;
   const random = mulberry32(seed);
-  return art.quiz.map((question) => shuffleQuizOptions(question.options.length, random));
+  return art.quiz.map((question, index) => {
+    const order = shuffleQuizOptions(question.options.length, random);
+    // A retake that happens to draw the same layout would look like the shuffle
+    // never ran, so nudge it one place when it matches the run before.
+    const previous = quizOptionOrders[index];
+    if (
+      Array.isArray(previous) &&
+      previous.length === order.length &&
+      previous.every((value, position) => value === order[position])
+    ) {
+      order.push(order.shift());
+    }
+    return order;
+  });
 }
 
 // Falls back to the authored order when the record no longer matches the run (a
