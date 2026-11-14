@@ -1083,8 +1083,14 @@ button.corner-fabs-right {
 }
 .note-sticky-drawing { flex: 1; width: 100%; object-fit: contain; }
 .note-sticky-name {
+  flex-shrink: 0;
   font-size: 8px; font-weight: 700; color: rgba(0,0,0,0.55);
   margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Posted date, day only — no time, the note is too small for a clock. */
+.note-sticky-date {
+  flex-shrink: 0; font-size: 7px; font-weight: 600; letter-spacing: 0.02em;
+  color: rgba(0,0,0,0.42); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .note-sticky.mine::after {
   content: "you"; position: absolute; top: -1px; right: -1px;
@@ -1097,8 +1103,12 @@ button.corner-fabs-right {
   padding: 6px 6px 12px;
 }
 .note-sticky-photo { flex: 1; width: 100%; object-fit: cover; border-radius: 1px; }
+.note-sticky.type-photo .note-sticky-photo { min-height: 0; }
 .note-sticky.type-photo .note-sticky-name {
   color: rgba(0,0,0,0.5); text-align: center; margin-top: 4px;
+}
+.note-sticky.type-photo .note-sticky-date {
+  color: rgba(0,0,0,0.4); text-align: center;
 }
 
 .note-view-content {

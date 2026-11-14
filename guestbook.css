@@ -218,6 +218,12 @@ html, body {
   text-align: center; font-size: 11px; color: rgba(42,35,32,0.7);
   font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
 }
+/* Posted date, day only — sits just above the name inside the bottom padding. */
+.note-sticky-date {
+  position: absolute; bottom: 25px; left: 0; right: 0;
+  text-align: center; font-size: 10px; font-weight: 600;
+  color: rgba(42,35,32,0.55); letter-spacing: 0.03em;
+}
 
 /* ---------------- Sidebar / Leaderboard ---------------- */
 .tv-sidebar {

@@ -2782,6 +2782,14 @@ function renderNotesBoard() {
     nameTag.textContent = note.name || "Anonymous";
     el.appendChild(nameTag);
 
+    const postedDate = formatNoteDate(note.timestamp);
+    if (postedDate) {
+      const dateTag = document.createElement("div");
+      dateTag.className = "note-sticky-date";
+      dateTag.textContent = postedDate;
+      el.appendChild(dateTag);
+    }
+
     el.addEventListener("click", () => {
       if (isMyNote(note)) openNoteEditor(note);
       else openNoteView(note);
@@ -3204,6 +3212,14 @@ function formatTime(seconds) {
   const m = Math.floor(s / 60);
   const r = s % 60;
   return m > 0 ? `${m}m ${r}s` : `${r}s`;
+}
+
+// Date without the time: the board note only has room for the day it was posted.
+function formatNoteDate(timestamp) {
+  if (!timestamp) return "";
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 function escapeHtml(str) {
