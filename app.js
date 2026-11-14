@@ -2111,10 +2111,17 @@ learnModal.addEventListener("keydown", (event) => {
 const QUIZ_RING_CIRCUMFERENCE = 2 * Math.PI * 52; // result ring radius
 const QUIZ_OPTION_KEYS = "ABCDEFGH";
 const QUIZ_BADGE_DELAY_MS = 700;
+// Answer options are dealt in a fresh order for every run. The seed mixes a
+// stable per-device id with the attempt counter, so two visitors sitting side by
+// side see different letters and a retake deals again.
+const QUIZ_SEED_KEY = "museum_quiz_seed_v1";
+const QUIZ_ORDER_SALT = 0x9e3779b1;
 
 let quizArtId = null;
 let quizIndex = 0;
 let quizAnswers = []; // { selected, correct } per answered question
+let quizOptionOrders = []; // question index -> stored option indexes in display order
+let quizAttempt = 0;
 let quizRunId = 0;
 let quizBadgeTimer = null;
 
@@ -2130,6 +2137,58 @@ function quizOptionKey(index) {
   return QUIZ_OPTION_KEYS[index] || String(index + 1);
 }
 
+// Only the on-screen positions move; the saved quiz keeps its authored order, so
+// the admin builder and the stored record still read the way they were written.
+function getQuizSeed() {
+  try {
+    let seed = localStorage.getItem(QUIZ_SEED_KEY);
+    if (!seed) {
+      seed = (self.crypto && self.crypto.randomUUID)
+        ? self.crypto.randomUUID()
+        : `quiz-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      localStorage.setItem(QUIZ_SEED_KEY, seed);
+    }
+    return seed;
+  } catch (_) {
+    // Private mode: nothing can be stored, but the attempt counter still keeps
+    // this run's order stable and different from the previous one.
+    return "";
+  }
+}
+
+function shuffleQuizOptions(count, random) {
+  const order = Array.from({ length: count }, (_, index) => index);
+  for (let i = order.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    const swap = order[i];
+    order[i] = order[j];
+    order[j] = swap;
+  }
+  // Never hand back the authored order: that would leave the correct answer on the
+  // same letter for everybody, which is the pattern this shuffle exists to break.
+  if (order.length > 1 && order.every((value, index) => value === index)) {
+    order.push(order.shift());
+  }
+  return order;
+}
+
+function buildQuizOptionOrders(art) {
+  const seed = hashString(`quiz-order|${art.id}|${getQuizSeed()}|${quizAttempt}`) ^ QUIZ_ORDER_SALT;
+  const random = mulberry32(seed);
+  return art.quiz.map((question) => shuffleQuizOptions(question.options.length, random));
+}
+
+// Falls back to the authored order when the record no longer matches the run (a
+// quiz edited while it was open), so a question can never lose an option.
+function quizOptionOrder(questionIndex) {
+  const art = getQuizArtwork();
+  const question = art && Array.isArray(art.quiz) ? art.quiz[questionIndex] : null;
+  if (!question) return [];
+  const order = quizOptionOrders[questionIndex];
+  if (Array.isArray(order) && order.length === question.options.length) return order;
+  return question.options.map((_, index) => index);
+}
+
 function startQuiz(artworkId) {
   const art = artworks.find((a) => a.id === artworkId);
   if (!art || !artworkHasQuiz(art)) return;
@@ -2137,6 +2196,8 @@ function startQuiz(artworkId) {
   quizArtId = artworkId;
   quizIndex = 0;
   quizAnswers = [];
+  quizAttempt += 1;
+  quizOptionOrders = buildQuizOptionOrders(art);
   quizRunId += 1;
   clearTimeout(quizBadgeTimer);
 
@@ -2197,28 +2258,30 @@ function renderQuizQuestion() {
   btnQuizNext.textContent = quizIndex === art.quiz.length - 1 ? "See Results" : "Next Question";
 
   quizOptions.innerHTML = "";
-  question.options.forEach((option, optionIndex) => {
+  // Options are painted in this run's shuffled order, and the letter keys follow
+  // the screen position, so A–D always read top to bottom.
+  quizOptionOrder(quizIndex).forEach((optionIndex, displayIndex) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "quiz-option-btn stagger-in";
-    button.style.setProperty("--i", optionIndex);
-    button.dataset.index = String(optionIndex);
+    button.style.setProperty("--i", displayIndex);
+    button.dataset.index = String(displayIndex);
 
     const key = document.createElement("span");
     key.className = "quiz-option-key";
     key.setAttribute("aria-hidden", "true");
-    key.textContent = quizOptionKey(optionIndex);
+    key.textContent = quizOptionKey(displayIndex);
 
     const text = document.createElement("span");
     text.className = "quiz-option-text";
-    text.textContent = option;
+    text.textContent = question.options[optionIndex];
 
     const mark = document.createElement("span");
     mark.className = "quiz-option-mark";
     mark.setAttribute("aria-hidden", "true");
 
     button.append(key, text, mark);
-    button.addEventListener("click", () => selectQuizAnswer(optionIndex));
+    button.addEventListener("click", () => selectQuizAnswer(displayIndex));
     quizOptions.appendChild(button);
   });
 
@@ -2236,19 +2299,23 @@ function selectQuizAnswer(selectedIndex) {
   if (!question) return;
   if (quizAnswers[quizIndex]) return; // already answered this question
 
-  const isCorrect = selectedIndex === question.correctIndex;
-  quizAnswers[quizIndex] = { selected: selectedIndex, correct: isCorrect };
+  // The buttons follow the shuffled order, so the tapped position has to be
+  // mapped back to the option the quiz was written with before it is judged.
+  const order = quizOptionOrder(quizIndex);
+  const correctDisplayIndex = order.indexOf(question.correctIndex);
+  const isCorrect = order[selectedIndex] === question.correctIndex;
+  quizAnswers[quizIndex] = { selected: order[selectedIndex], correct: isCorrect };
 
   const optionButtons = Array.from(quizOptions.querySelectorAll(".quiz-option-btn"));
-  optionButtons.forEach((button, index) => {
+  optionButtons.forEach((button, displayIndex) => {
     button.disabled = true;
     const mark = button.querySelector(".quiz-option-mark");
-    const label = `${quizOptionKey(index)}. ${question.options[index]}`;
-    if (index === question.correctIndex) {
+    const label = `${quizOptionKey(displayIndex)}. ${question.options[order[displayIndex]]}`;
+    if (displayIndex === correctDisplayIndex) {
       button.classList.add("correct");
       if (mark) mark.textContent = "✓";
       button.setAttribute("aria-label", `${label} — correct answer`);
-    } else if (index === selectedIndex) {
+    } else if (displayIndex === selectedIndex) {
       button.classList.add("incorrect");
       if (mark) mark.textContent = "✗";
       button.setAttribute("aria-label", `${label} — your answer, incorrect`);
@@ -2261,7 +2328,7 @@ function selectQuizAnswer(selectedIndex) {
   quizFeedbackTitle.textContent = isCorrect ? "Correct!" : "Not quite";
   quizFeedbackText.textContent = isCorrect
     ? "Nicely spotted — that's the right answer."
-    : `The correct answer was ${quizOptionKey(question.correctIndex)} — ${question.options[question.correctIndex]}.`;
+    : `The correct answer was ${quizOptionKey(correctDisplayIndex)} — ${question.options[question.correctIndex]}.`;
 
   btnQuizNext.classList.remove("hidden");
   updateQuizScorePill(isCorrect);
