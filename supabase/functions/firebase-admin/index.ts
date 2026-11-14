@@ -56,9 +56,6 @@ export default {
           immersiveScale: Number(body.immersiveScale) || 1,
           immersiveRotation: body.immersiveRotation || "0 0 0",
           immersiveForward: Number(body.immersiveForward) || -3,
-          animationClip: body.animationClip ? body.animationClip.slice(0, 100) : null,
-          animationLoop: body.animationLoop || "repeat",
-          animationTimeScale: Number(body.animationTimeScale) || 1,
           icon: body.icon || "🖼️",
           showInMainCollection: body.showInMainCollection !== false,
           scannable: body.scannable !== false,
@@ -84,7 +81,7 @@ export default {
       if (method === "PATCH" && path.startsWith("/artworks/")) {
         const artworkId = path.split("/")[2];
         const body = await req.json();
-        const allowedFields = ["baseScale", "modelPositionZ", "immersiveScale", "immersiveRotation", "immersiveForward", "animationClip", "animationLoop", "animationTimeScale", "showInMainCollection", "scannable", "published", "name", "details", "artist", "year", "location", "icon"];
+        const allowedFields = ["baseScale", "modelPositionZ", "immersiveScale", "immersiveRotation", "immersiveForward", "showInMainCollection", "scannable", "published", "name", "details", "artist", "year", "location", "icon"];
         const updates: any = {};
         for (const field of allowedFields) {
           if (body[field] !== undefined) {

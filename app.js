@@ -159,12 +159,7 @@ const BUILTIN_ARTWORKS = [
     modelMtl: null,
     baseScale: 0.18,
     icon: "🏛️",
-    // Three characters share this diorama and the exporter merged all of their
-    // takes into `All_Models_Loop`, which keyed all three rigs at once — the
-    // pile-up visitors reported. Listing the takes plays them in order instead:
-    // the CPR scene, then the planting, then the briefcase idle, on repeat.
-    animationClip:
-      "Administering-Cpr_mixamo.com | Plant-A-Plant_mixamo.com | Standing-W_Briefcase-Idle_mixamo.com",
+    animationClip: "All_Models_Loop",
     immersiveSkybox: "./assets/MarianoTriasSkybox.glb",
     immersiveScale: 1.1,
     immersiveRotation: "0 0 0",
@@ -3440,9 +3435,6 @@ window.addEventListener(
 // -------------------------------------------------------------------
 function disposeModel(modelEl) {
   if (!modelEl) return;
-  // A running clip sequence listens on the element itself, so it has to go
-  // before the mesh it drives is thrown away.
-  stopAnimationSequence(modelEl);
   const mesh = modelEl.getObject3D("mesh");
   if (mesh) {
     mesh.traverse((obj) => {
@@ -3633,163 +3625,6 @@ function beginModelReveal(modelEl, art) {
 }
 
 // -------------------------------------------------------------------
-// glTF animation
-// -------------------------------------------------------------------
-// animation-mixer's `clip` is one wildcard pattern, not a list. Its default
-// (`*`) starts every take in the file at once, which turns a rigged export with
-// several clips into a pile-up instead of an animation. Artworks therefore name
-// the clip they want in `animationClip` — a plain name, a case-insensitive name
-// or a wildcard such as `*Loop*`. A clip the model does not contain falls back
-// to the first one it does contain, and a model without clips never gets a
-// mixer at all.
-//
-// A diorama exported with one take per character also merges every take into a
-// single clip (MarianoTrias.glb keys M1, M9 and M11 over the whole
-// `All_Models_Loop` timeline), so that clip plays every character at once.
-// Listing takes instead of naming one — `"Cpr | Plant | Idle"` — plays them in
-// order: each take runs to its end, holds its last pose through
-// clampWhenFinished and hands over to the next, then the list starts again.
-// Stopping an action leaves the other rigs where they stood, so the diorama
-// performs its characters one after another instead of all at the same time.
-//
-// `animationLoop` (once / repeat / pingpong) and `animationTimeScale` are
-// optional tweaks for the single-clip case; a sequence always loops the list.
-const ANIMATION_LOOP_MODES = ["once", "repeat", "pingpong"];
-const ANIMATION_SEQUENCE_SEPARATOR = /\s*[|>,]\s*/;
-
-function escapeAnimationPattern(text) {
-  return text.replace(/[|\\{}()[\]^$+?.]/g, "\\$&");
-}
-
-function animationClipRegExp(pattern) {
-  return new RegExp("^" + String(pattern).split("*").map(escapeAnimationPattern).join(".*") + "$");
-}
-
-function modelAnimationClips(modelEl) {
-  const mesh = modelEl && modelEl.getObject3D("mesh");
-  const clips = (mesh && mesh.animations) || [];
-  return clips
-    .map((clip) => clip && clip.name)
-    .filter((name) => typeof name === "string" && name.length > 0);
-}
-
-function pickAnimationClip(requested, available) {
-  if (!available.length) return "";
-  const wanted = String(requested || "").trim();
-  if (!wanted) return available[0];
-  if (wanted.includes("*")) {
-    const pattern = animationClipRegExp(wanted);
-    return available.find((name) => pattern.test(name)) || available[0];
-  }
-  const lowered = wanted.toLowerCase();
-  return (
-    available.find((name) => name === wanted) ||
-    available.find((name) => name.toLowerCase() === lowered) ||
-    available.find((name) => name.toLowerCase().includes(lowered)) ||
-    available.find((name) => lowered.includes(name.toLowerCase())) ||
-    available[0]
-  );
-}
-
-function animationClipMatches(requested, clip) {
-  const wanted = String(requested || "").trim();
-  if (!wanted || !clip) return false;
-  if (wanted.includes("*")) return animationClipRegExp(wanted).test(clip);
-  const lowered = wanted.toLowerCase();
-  return clip.toLowerCase() === lowered || clip.toLowerCase().includes(lowered);
-}
-
-// `animationClip: "Take A | Take B"` — every entry is resolved against the clips
-// the model actually ships. Fewer than two entries means "play one clip", which
-// the single-clip path in applyModelAnimation() handles.
-function requestedAnimationSequence(art, available) {
-  const wanted = String((art && art.animationClip) || "").trim();
-  if (!wanted || wanted === "*") return [];
-  const parts = wanted.split(ANIMATION_SEQUENCE_SEPARATOR).map((part) => part.trim()).filter(Boolean);
-  if (parts.length < 2) return [];
-
-  return parts.map((part) => {
-    const clip = pickAnimationClip(part, available);
-    if (!animationClipMatches(part, clip)) {
-      console.warn(
-        `[AR] "${art.name}" asks for animation "${part}" but the model only has: ${available.join(", ")}. Playing "${clip}".`
-      );
-    }
-    return clip;
-  });
-}
-
-function animationMixerSettings(art, clip, loop) {
-  const timeScale = Number(art && art.animationTimeScale);
-  const settings = [`clip: ${clip}`, `loop: ${loop}`];
-  if (Number.isFinite(timeScale) && timeScale > 0 && timeScale !== 1) settings.push(`timeScale: ${timeScale}`);
-  // A one-shot clip should hold its last pose instead of snapping back.
-  if (loop === "once") settings.push("clampWhenFinished: true");
-  return settings.join("; ");
-}
-
-function stopAnimationSequence(modelEl) {
-  const sequence = modelEl && modelEl.__animationSequence;
-  if (!sequence) return;
-  modelEl.removeEventListener("animation-finished", sequence.handler);
-  delete modelEl.__animationSequence;
-}
-
-function startAnimationSequence(modelEl, art, steps) {
-  stopAnimationSequence(modelEl);
-  const sequence = { steps, index: 0 };
-  // animation-mixer emits this from the mixer's own `finished` event, so the
-  // changeover needs no timers of our own and stays in step with the clip.
-  sequence.handler = () => {
-    sequence.index = (sequence.index + 1) % sequence.steps.length;
-    modelEl.setAttribute("animation-mixer", animationMixerSettings(art, sequence.steps[sequence.index], "once"));
-  };
-  modelEl.addEventListener("animation-finished", sequence.handler);
-  modelEl.__animationSequence = sequence;
-  modelEl.setAttribute("animation-mixer", animationMixerSettings(art, steps[0], "once"));
-}
-
-// The clip list only exists once the glTF is parsed, so the mixer is configured
-// from the model-loaded event instead of guessing with `clip: *` up front.
-function applyModelAnimation(modelEl, art) {
-  if (!modelEl || !art || !art.modelObj || !/\.(glb|gltf)$/i.test(art.modelObj)) return false;
-
-  const available = modelAnimationClips(modelEl);
-  if (!available.length) {
-    stopAnimationSequence(modelEl);
-    modelEl.removeAttribute("animation-mixer");
-    return false;
-  }
-
-  const steps = requestedAnimationSequence(art, available);
-  if (steps.length) {
-    startAnimationSequence(modelEl, art, steps);
-    return true;
-  }
-
-  stopAnimationSequence(modelEl);
-  const wanted = String(art.animationClip || "").trim();
-  const clip = wanted === "*" ? "*" : pickAnimationClip(wanted, available);
-  if (wanted && wanted !== "*" && clip.toLowerCase() !== wanted.toLowerCase()) {
-    console.warn(
-      `[AR] "${art.name}" asks for animation "${wanted}" but the model only has: ${available.join(", ")}. Playing "${clip}".`
-    );
-  }
-
-  const loop = ANIMATION_LOOP_MODES.includes(art.animationLoop) ? art.animationLoop : "repeat";
-  modelEl.setAttribute("animation-mixer", animationMixerSettings(art, clip, loop));
-  return true;
-}
-
-function watchModelAnimation(modelEl, art) {
-  if (!modelEl) return;
-  const apply = () => applyModelAnimation(modelEl, art);
-  modelEl.addEventListener("model-loaded", apply);
-  // A reused entity can already hold its mesh, so apply straight away too.
-  if (modelAnimationClips(modelEl).length) apply();
-}
-
-// -------------------------------------------------------------------
 // Target found / lost
 // -------------------------------------------------------------------
 function getOrCreateModelEntity(art, targetIndex, targetEl) {
@@ -3808,9 +3643,7 @@ function getOrCreateModelEntity(art, targetIndex, targetEl) {
   const isGltf = art.modelObj.match(/\.(glb|gltf)$/i);
   if (isGltf) {
     modelEl.setAttribute("gltf-model", art.modelObj);
-    // The mixer waits for model-loaded so it can read the clip list and play
-    // the clip the artwork asks for instead of every clip at once.
-    watchModelAnimation(modelEl, art);
+    modelEl.setAttribute("animation-mixer", `clip: ${art.animationClip || "*"}; loop: repeat`);
   } else {
     modelEl.setAttribute(
       "obj-model",
@@ -4195,9 +4028,6 @@ const uploaded = Object.entries(data).map(([key, val]) => ({
           immersiveScale: val.immersiveScale == null ? 1 : Number(val.immersiveScale),
           immersiveRotation: val.immersiveRotation || "0 0 0",
           immersiveForward: val.immersiveForward == null ? -3 : Number(val.immersiveForward),
-          animationClip: val.animationClip || null,
-          animationLoop: val.animationLoop || null,
-          animationTimeScale: val.animationTimeScale == null ? null : Number(val.animationTimeScale),
           icon: val.icon || "🖼️",
           unlocked: false,
           showInMainCollection: val.showInMainCollection !== false,
@@ -5821,15 +5651,11 @@ immersiveContainer.innerHTML = `
            spinning the camera away from it. -->
       <a-entity camera look-controls="touchEnabled: false; mouseEnabled: false; magicWindowTrackingEnabled: true" position="0 1.6 0"></a-entity>
       <a-entity gltf-model="${art.immersiveSkybox}" position="0 0 0" scale="100 100 100"></a-entity>
-      <a-entity id="immersive-model" gltf-model="${art.modelObj}" position="0 0 ${art.immersiveForward ?? -3}" rotation="${art.immersiveRotation || '0 0 0'}" scale="${art.immersiveScale || art.baseScale || 1} ${art.immersiveScale || art.baseScale || 1} ${art.immersiveScale || art.baseScale || 1}"></a-entity>
+      <a-entity gltf-model="${art.modelObj}" animation-mixer="clip: ${art.animationClip || "*"}; loop: repeat" position="0 0 ${art.immersiveForward ?? -3}" rotation="${art.immersiveRotation || '0 0 0'}" scale="${art.immersiveScale || art.baseScale || 1} ${art.immersiveScale || art.baseScale || 1} ${art.immersiveScale || art.baseScale || 1}"></a-entity>
       <a-light type="ambient" color="#ffffff" intensity="0.6"></a-light>
       <a-light type="directional" color="#ffffff" intensity="0.4" position="-1 2 1"></a-light>
     </a-scene>
   `;
-
-  // Same clip resolution as the scan view: the mixer is added once the glTF has
-  // reported its animations, so immersive playback loops the intended clip.
-  watchModelAnimation(immersiveContainer.querySelector("#immersive-model"), art);
 
   // Every visit starts with the signs showing, the signs on their layout spots
   // and no sign left open from an earlier visit.
