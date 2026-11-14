@@ -3109,6 +3109,48 @@ btnBuildAr.addEventListener("click", async () => {
 // =====================================================================
 // SHARED UTILITIES
 // =====================================================================
+// Every privileged request runs through this helper: Firebase rejects a request
+// with 401/403 when the browser is still holding an ID token that has since been
+// rotated or revoked, so a rejected call is retried once with a forced token
+// refresh. Without the retry a delete fails even though the rules are correct.
+async function adminAuthedFetch(path, init = {}) {
+  const user = firebase.auth().currentUser;
+  if (!user) throw new Error("you are signed out — sign in again, then retry");
+  const send = async (forceRefresh) => {
+    const idToken = await user.getIdToken(forceRefresh);
+    const separator = path.includes("?") ? "&" : "?";
+    return fetch(`${FIREBASE_URL}${path}${separator}auth=${idToken}`, init);
+  };
+  const first = await send(false);
+  if (first.status !== 401 && first.status !== 403) return first;
+  return send(true);
+}
+
+// Turns whatever Firebase answered into a sentence that points at the real fix
+// instead of the blanket "make sure the rules are deployed" message.
+async function describeAdminWriteFailure(res) {
+  const raw = await res.text().catch(() => "");
+  let detail = raw;
+  try {
+    detail = JSON.parse(raw).error || raw;
+  } catch (_err) {
+    /* plain-text body, e.g. "Permission denied" */
+  }
+  detail = String(detail || "").trim().slice(0, 160);
+  if (res.status === 401 || res.status === 403) {
+    return `Firebase refused the write (${res.status}${detail ? ` ${detail}` : ""}). Sign out and sign in again with the admin account, then retry.`;
+  }
+  return `Firebase answered ${res.status}${detail ? ` ${detail}` : ""}.`;
+}
+
+// Network-level failures (offline, blocked request) reject the fetch instead of
+// returning a status, so give them their own wording.
+function describeNetworkFailure(err) {
+  return err instanceof TypeError
+    ? "the request never reached Firebase — check the connection and try again"
+    : (err && err.message) || "unknown error";
+}
+
 function attachDeleteHandlers() {
   document.querySelectorAll(".admin-delete-btn").forEach((btn) => {
     btn.replaceWith(btn.cloneNode(true));
@@ -3118,9 +3160,11 @@ function attachDeleteHandlers() {
       if (!confirm(`Delete ${btn.dataset.label}? This can't be undone.`)) return;
       btn.disabled = true;
       btn.textContent = "Deleting...";
-      const user = firebase.auth().currentUser;
-      if (!user) return;
-      const idToken = await user.getIdToken();
+      if (!firebase.auth().currentUser) {
+        alert("Delete failed. You are signed out — sign in again, then retry.");
+        loadAllData();
+        return;
+      }
       const path = btn.dataset.path || "";
       const slashIndex = path.indexOf("/");
       const collection = slashIndex === -1 ? path : path.slice(0, slashIndex);
@@ -3132,11 +3176,12 @@ function attachDeleteHandlers() {
       else if (collection === "artworks") endpoint = `/artworks/${encodeURIComponent(key)}.json`;
       else return;
       try {
-        const res = await fetch(`${FIREBASE_URL}${endpoint}?auth=${idToken}`, { method: "DELETE" });
-        if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+        const res = await adminAuthedFetch(endpoint, { method: "DELETE" });
+        if (!res.ok) throw new Error(await describeAdminWriteFailure(res));
       } catch (err) {
-        console.error("Delete failed:", err);
-        alert("Delete failed. Make sure the admin database rules are deployed.");
+        const uid = firebase.auth().currentUser ? firebase.auth().currentUser.uid : "none";
+        console.error(`Delete failed (signed in as ${uid}):`, err);
+        alert(`Delete failed: ${describeNetworkFailure(err)}.`);
       } finally {
         loadAllData();
       }
@@ -3164,22 +3209,24 @@ document.getElementById("btn-export-notes").addEventListener("click", async () =
 });
 async function clearCollection(collection, label) {
   if (!confirm(`Delete ALL ${label}? This can't be undone.`)) return;
-  const user = firebase.auth().currentUser;
-  if (!user) return;
-  const idToken = await user.getIdToken();
+  if (!firebase.auth().currentUser) {
+    alert("Clear failed. You are signed out — sign in again, then retry.");
+    return;
+  }
   try {
-    const listRes = await fetch(`${FIREBASE_URL}/${collection}.json?auth=${idToken}`);
-    if (!listRes.ok) throw new Error(`${listRes.status} ${await listRes.text()}`);
+    const listRes = await adminAuthedFetch(`/${collection}.json`);
+    if (!listRes.ok) throw new Error(await describeAdminWriteFailure(listRes));
     const data = await listRes.json();
     const keys = data ? Object.keys(data) : [];
     const results = await Promise.all(keys.map((key) =>
-      fetch(`${FIREBASE_URL}/${collection}/${encodeURIComponent(key)}.json?auth=${idToken}`, { method: "DELETE" })
+      adminAuthedFetch(`/${collection}/${encodeURIComponent(key)}.json`, { method: "DELETE" })
     ));
     const failed = results.find((res) => !res.ok);
-    if (failed) throw new Error(`${failed.status} ${await failed.text()}`);
+    if (failed) throw new Error(await describeAdminWriteFailure(failed));
   } catch (err) {
-    console.error("Clear failed:", err);
-    alert("Clear failed. Make sure the admin database rules are deployed.");
+    const uid = firebase.auth().currentUser ? firebase.auth().currentUser.uid : "none";
+    console.error(`Clear failed (signed in as ${uid}):`, err);
+    alert(`Clear failed: ${describeNetworkFailure(err)}.`);
   } finally {
     loadAllData();
   }
