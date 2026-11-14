@@ -159,7 +159,12 @@ const BUILTIN_ARTWORKS = [
     modelMtl: null,
     baseScale: 0.18,
     icon: "🏛️",
-    animationClip: "All_Models_Loop",
+    // Three characters share this diorama and the exporter merged all of their
+    // takes into `All_Models_Loop`, which keyed all three rigs at once — the
+    // pile-up visitors reported. Listing the takes plays them in order instead:
+    // the CPR scene, then the planting, then the briefcase idle, on repeat.
+    animationClip:
+      "Administering-Cpr_mixamo.com | Plant-A-Plant_mixamo.com | Standing-W_Briefcase-Idle_mixamo.com",
     immersiveSkybox: "./assets/MarianoTriasSkybox.glb",
     immersiveScale: 1.1,
     immersiveRotation: "0 0 0",
@@ -3435,6 +3440,9 @@ window.addEventListener(
 // -------------------------------------------------------------------
 function disposeModel(modelEl) {
   if (!modelEl) return;
+  // A running clip sequence listens on the element itself, so it has to go
+  // before the mesh it drives is thrown away.
+  stopAnimationSequence(modelEl);
   const mesh = modelEl.getObject3D("mesh");
   if (mesh) {
     mesh.traverse((obj) => {
@@ -3633,9 +3641,21 @@ function beginModelReveal(modelEl, art) {
 // the clip they want in `animationClip` — a plain name, a case-insensitive name
 // or a wildcard such as `*Loop*`. A clip the model does not contain falls back
 // to the first one it does contain, and a model without clips never gets a
-// mixer at all. `animationLoop` (once / repeat / pingpong) and
-// `animationTimeScale` are optional tweaks.
+// mixer at all.
+//
+// A diorama exported with one take per character also merges every take into a
+// single clip (MarianoTrias.glb keys M1, M9 and M11 over the whole
+// `All_Models_Loop` timeline), so that clip plays every character at once.
+// Listing takes instead of naming one — `"Cpr | Plant | Idle"` — plays them in
+// order: each take runs to its end, holds its last pose through
+// clampWhenFinished and hands over to the next, then the list starts again.
+// Stopping an action leaves the other rigs where they stood, so the diorama
+// performs its characters one after another instead of all at the same time.
+//
+// `animationLoop` (once / repeat / pingpong) and `animationTimeScale` are
+// optional tweaks for the single-clip case; a sequence always loops the list.
 const ANIMATION_LOOP_MODES = ["once", "repeat", "pingpong"];
+const ANIMATION_SEQUENCE_SEPARATOR = /\s*[|>,]\s*/;
 
 function escapeAnimationPattern(text) {
   return text.replace(/[|\\{}()[\]^$+?.]/g, "\\$&");
@@ -3671,6 +3691,64 @@ function pickAnimationClip(requested, available) {
   );
 }
 
+function animationClipMatches(requested, clip) {
+  const wanted = String(requested || "").trim();
+  if (!wanted || !clip) return false;
+  if (wanted.includes("*")) return animationClipRegExp(wanted).test(clip);
+  const lowered = wanted.toLowerCase();
+  return clip.toLowerCase() === lowered || clip.toLowerCase().includes(lowered);
+}
+
+// `animationClip: "Take A | Take B"` — every entry is resolved against the clips
+// the model actually ships. Fewer than two entries means "play one clip", which
+// the single-clip path in applyModelAnimation() handles.
+function requestedAnimationSequence(art, available) {
+  const wanted = String((art && art.animationClip) || "").trim();
+  if (!wanted || wanted === "*") return [];
+  const parts = wanted.split(ANIMATION_SEQUENCE_SEPARATOR).map((part) => part.trim()).filter(Boolean);
+  if (parts.length < 2) return [];
+
+  return parts.map((part) => {
+    const clip = pickAnimationClip(part, available);
+    if (!animationClipMatches(part, clip)) {
+      console.warn(
+        `[AR] "${art.name}" asks for animation "${part}" but the model only has: ${available.join(", ")}. Playing "${clip}".`
+      );
+    }
+    return clip;
+  });
+}
+
+function animationMixerSettings(art, clip, loop) {
+  const timeScale = Number(art && art.animationTimeScale);
+  const settings = [`clip: ${clip}`, `loop: ${loop}`];
+  if (Number.isFinite(timeScale) && timeScale > 0 && timeScale !== 1) settings.push(`timeScale: ${timeScale}`);
+  // A one-shot clip should hold its last pose instead of snapping back.
+  if (loop === "once") settings.push("clampWhenFinished: true");
+  return settings.join("; ");
+}
+
+function stopAnimationSequence(modelEl) {
+  const sequence = modelEl && modelEl.__animationSequence;
+  if (!sequence) return;
+  modelEl.removeEventListener("animation-finished", sequence.handler);
+  delete modelEl.__animationSequence;
+}
+
+function startAnimationSequence(modelEl, art, steps) {
+  stopAnimationSequence(modelEl);
+  const sequence = { steps, index: 0 };
+  // animation-mixer emits this from the mixer's own `finished` event, so the
+  // changeover needs no timers of our own and stays in step with the clip.
+  sequence.handler = () => {
+    sequence.index = (sequence.index + 1) % sequence.steps.length;
+    modelEl.setAttribute("animation-mixer", animationMixerSettings(art, sequence.steps[sequence.index], "once"));
+  };
+  modelEl.addEventListener("animation-finished", sequence.handler);
+  modelEl.__animationSequence = sequence;
+  modelEl.setAttribute("animation-mixer", animationMixerSettings(art, steps[0], "once"));
+}
+
 // The clip list only exists once the glTF is parsed, so the mixer is configured
 // from the model-loaded event instead of guessing with `clip: *` up front.
 function applyModelAnimation(modelEl, art) {
@@ -3678,10 +3756,18 @@ function applyModelAnimation(modelEl, art) {
 
   const available = modelAnimationClips(modelEl);
   if (!available.length) {
+    stopAnimationSequence(modelEl);
     modelEl.removeAttribute("animation-mixer");
     return false;
   }
 
+  const steps = requestedAnimationSequence(art, available);
+  if (steps.length) {
+    startAnimationSequence(modelEl, art, steps);
+    return true;
+  }
+
+  stopAnimationSequence(modelEl);
   const wanted = String(art.animationClip || "").trim();
   const clip = wanted === "*" ? "*" : pickAnimationClip(wanted, available);
   if (wanted && wanted !== "*" && clip.toLowerCase() !== wanted.toLowerCase()) {
@@ -3691,12 +3777,7 @@ function applyModelAnimation(modelEl, art) {
   }
 
   const loop = ANIMATION_LOOP_MODES.includes(art.animationLoop) ? art.animationLoop : "repeat";
-  const timeScale = Number(art.animationTimeScale);
-  const settings = [`clip: ${clip}`, `loop: ${loop}`];
-  if (Number.isFinite(timeScale) && timeScale > 0 && timeScale !== 1) settings.push(`timeScale: ${timeScale}`);
-  // A one-shot clip should hold its last pose instead of snapping back.
-  if (loop === "once") settings.push("clampWhenFinished: true");
-  modelEl.setAttribute("animation-mixer", settings.join("; "));
+  modelEl.setAttribute("animation-mixer", animationMixerSettings(art, clip, loop));
   return true;
 }
 

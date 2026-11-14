@@ -62,7 +62,10 @@ const BUILTIN_ARTWORKS = [
       "Republic and stayed loyal to the cause through the Philippine–American War. He died on " +
       "February 22, 1914, and the municipality of General Trias, Cavite, keeps his memory alive in its name.",
     baseScale: 0.18,
-    animationClip: "All_Models_Loop",
+    // Same take list as app.js: the diorama ships one clip per character, and
+    // listing them plays the scene as a sequence instead of all at once.
+    animationClip:
+      "Administering-Cpr_mixamo.com | Plant-A-Plant_mixamo.com | Standing-W_Briefcase-Idle_mixamo.com",
     icon: "🏛️",
     hasModel: true,
     showInMainCollection: true,
