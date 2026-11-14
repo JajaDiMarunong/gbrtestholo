@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="GBR Admin" />
 <link rel="apple-touch-icon" href="./assets/logo.png" />
-<link rel="stylesheet" href="admin.css?v=20" />
+<link rel="stylesheet" href="admin.css?v=21" />
 <script src="asset-manifest.js"></script>
 <script src="offline-store.js?v=1"></script>
 <script>
@@ -180,6 +180,7 @@
               </div>
               <span id="stat-leaderboard-count" class="kpi-value">—</span>
               <span id="stat-completions-note" class="kpi-caption">Visitors who finished the collection</span>
+              <span id="stat-completions-latest" class="kpi-caption kpi-caption-sub">No completions posted yet</span>
             </article>
 
             <article class="kpi-card">
@@ -189,6 +190,7 @@
               </div>
               <span id="stat-notes-count" class="kpi-value">—</span>
               <span id="stat-notes-note" class="kpi-caption">Notes left by visitors</span>
+              <span id="stat-notes-latest" class="kpi-caption kpi-caption-sub">No guestbook notes yet</span>
             </article>
           </div>
 
@@ -544,6 +546,20 @@
             </div>
           </div>
 
+          <div class="list-filter-bar">
+            <div class="date-filter" id="leaderboard-date-filter" role="group" aria-label="Filter the leaderboard by date">
+              <button class="filter-tab active" type="button" data-range="all">All</button>
+              <button class="filter-tab" type="button" data-range="today">Today</button>
+              <button class="filter-tab" type="button" data-range="week">7 Days</button>
+              <button class="filter-tab" type="button" data-range="month">30 Days</button>
+              <label class="date-filter-pick">
+                <span>Pick a day</span>
+                <input id="leaderboard-date" class="text-input date-input" type="date" aria-label="Show only the leaderboard entries posted on this day" />
+              </label>
+            </div>
+            <p id="leaderboard-date-summary" class="list-filter-summary" aria-live="polite"></p>
+          </div>
+
           <div class="panel table-panel">
             <div id="admin-leaderboard-list" class="admin-list"></div>
           </div>
@@ -559,6 +575,20 @@
               <button id="btn-export-notes" class="btn-tiny">Export JSON</button>
               <button id="btn-clear-notes" class="btn-tiny danger">Clear All</button>
             </div>
+          </div>
+
+          <div class="list-filter-bar">
+            <div class="date-filter" id="notes-date-filter" role="group" aria-label="Filter the guestbook by date">
+              <button class="filter-tab active" type="button" data-range="all">All</button>
+              <button class="filter-tab" type="button" data-range="today">Today</button>
+              <button class="filter-tab" type="button" data-range="week">7 Days</button>
+              <button class="filter-tab" type="button" data-range="month">30 Days</button>
+              <label class="date-filter-pick">
+                <span>Pick a day</span>
+                <input id="notes-date" class="text-input date-input" type="date" aria-label="Show only the guestbook notes posted on this day" />
+              </label>
+            </div>
+            <p id="notes-date-summary" class="list-filter-summary" aria-live="polite"></p>
           </div>
 
           <div class="panel table-panel">
@@ -669,6 +699,6 @@
   </script>
 
   <script src="recaptcha.js?v=5" defer></script>
-  <script src="admin.js?v=30" defer></script>
+  <script src="admin.js?v=31" defer></script>
 </body>
 </html>

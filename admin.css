@@ -600,6 +600,7 @@ svg { display: block; }
 }
 .kpi-live .kpi-value { color: var(--success); }
 .kpi-caption { margin-top: 8px; color: var(--muted-2); font-size: 10.5px; line-height: 1.35; }
+.kpi-caption-sub { margin-top: 4px; font-size: 10px; opacity: 0.85; }
 .live-pill {
   display: inline-flex;
   align-items: center;
@@ -665,6 +666,37 @@ svg { display: block; }
   background: var(--gold-soft);
   border-color: rgba(201, 168, 106, 0.26);
 }
+
+/* ---------------- Date filters on the moderator lists ---------------- */
+/* The leaderboard and guestbook tabs add a range/day filter above their list;
+   the tabs reuse .filter-tab so both toolbars look and behave the same. */
+.list-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.date-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.date-filter-pick { display: flex; align-items: center; gap: 6px; }
+.date-filter-pick > span {
+  color: var(--muted-2);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.text-input.date-input {
+  width: 156px;
+  min-height: 0;
+  padding: 5px 9px;
+  font-size: 11.5px;
+}
+.date-input::-webkit-calendar-picker-indicator { opacity: 0.55; cursor: pointer; }
+.date-input::-webkit-calendar-picker-indicator:hover { opacity: 0.9; }
+.list-filter-summary { margin: 0; color: var(--muted-2); font-size: 10.5px; font-variant-numeric: tabular-nums; }
 
 .visits-chart {
   display: flex;
@@ -1242,6 +1274,7 @@ body.drawer-open { overflow: hidden; }
 .admin-row-info { flex: 1; min-width: 0; }
 .admin-row-info .admin-row-name { color: var(--text); font-weight: 650; }
 .admin-row-info .admin-row-meta { overflow: hidden; color: var(--muted); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.admin-row-info .admin-row-date { margin-top: 2px; color: var(--muted-2); font-size: 10.5px; font-variant-numeric: tabular-nums; }
 .admin-row-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
 .admin-delete-btn {
@@ -1410,6 +1443,10 @@ body.drawer-open { overflow: hidden; }
   .admin-row-actions { width: 100%; justify-content: flex-end; }
   .admin-note-preview { width: 72px; height: 82px; }
   .date-select { width: 100%; }
+  .list-filter-bar { width: 100%; align-items: flex-start; }
+  .date-filter { width: 100%; }
+  .date-filter-pick { width: 100%; flex-direction: column; align-items: stretch; gap: 4px; }
+  .text-input.date-input { width: 100%; }
   .artwork-row-controls { flex-wrap: wrap; padding-left: 0; }
   .artwork-row-actions { width: 100%; justify-content: flex-end; }
   .drawer-body, .artwork-drawer .panel-head, .drawer-footer { padding-left: 18px; padding-right: 18px; }

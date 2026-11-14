@@ -48,6 +48,12 @@ const visitsChartTotal = document.getElementById("visits-chart-total");
 
 const adminLeaderboardList = document.getElementById("admin-leaderboard-list");
 const adminNotesList = document.getElementById("admin-notes-list");
+const leaderboardDateFilter = document.getElementById("leaderboard-date-filter");
+const leaderboardDateInput = document.getElementById("leaderboard-date");
+const leaderboardDateSummary = document.getElementById("leaderboard-date-summary");
+const notesDateFilter = document.getElementById("notes-date-filter");
+const notesDateInput = document.getElementById("notes-date");
+const notesDateSummary = document.getElementById("notes-date-summary");
 const adminNoteViewModal = document.getElementById("admin-note-view-modal");
 const adminNoteViewContent = document.getElementById("admin-note-view-content");
 const adminNoteViewName = document.getElementById("admin-note-view-name");
@@ -124,6 +130,11 @@ const markerTestStatus = document.getElementById("marker-test-status");
 // Cached data for the moderator lists
 let cachedLeaderboard = [];
 let cachedNotes = [];
+// Date filter currently applied to each list: all | today | week | month | day
+let leaderboardDateRange = "all";
+let leaderboardDateDay = "";
+let notesDateRange = "all";
+let notesDateDay = "";
 
 // -------------------------------------------------------------------
 // Release info + update check
@@ -1261,6 +1272,20 @@ function renderAnalytics() {
   setStatText("stat-visits-today-note", yesterdayVisits === 0 ? "No visits yesterday" : `${yesterdayVisits} yesterday`);
   setStatText("stat-notes-note", recentNoteCount === 0 ? "No notes in the last 7 days" : `${recentNoteCount} added in the last 7 days`);
 
+  // When the newest completion and guestbook note were posted, straight from the
+  // Firebase timestamps, so staff can see at a glance whether the museum has had
+  // activity today without opening either list.
+  const latestCompletion = cachedLeaderboardStats.reduce((latest, [, entry]) => Math.max(latest, entryTimestamp(entry)), 0);
+  const latestNote = cachedNoteStats.reduce((latest, [, note]) => Math.max(latest, entryTimestamp(note)), 0);
+  setStatText(
+    "stat-completions-latest",
+    latestCompletion ? `Latest posted ${formatPostedDateTime(latestCompletion)}` : "No completions posted yet"
+  );
+  setStatText(
+    "stat-notes-latest",
+    latestNote ? `Latest posted ${formatPostedDate(latestNote)}` : "No guestbook notes yet"
+  );
+
   const weekChange = previousWeekVisits > 0
     ? Math.round(((weekVisits - previousWeekVisits) / previousWeekVisits) * 100)
     : null;
@@ -1463,6 +1488,110 @@ visitsFilter.addEventListener("click", (e) => {
 });
 
 // =====================================================================
+// DATE FILTERS FOR THE MODERATOR LISTS
+// Completions and guestbook notes both carry the moment they were created in a
+// `timestamp` field (milliseconds, written by the app when the record is
+// posted), so every filter below reads that one field and nothing else.
+// =====================================================================
+const LIST_DAY_MS = 24 * 60 * 60 * 1000;
+
+function entryTimestamp(entry) {
+  const value = Number(entry && entry.timestamp);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function formatPostedDate(timestamp) {
+  if (!timestamp) return "";
+  return new Date(timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function formatPostedDateTime(timestamp) {
+  if (!timestamp) return "";
+  const time = new Date(timestamp).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return `${formatPostedDate(timestamp)} · ${time}`;
+}
+
+function nextDayStart(timestamp) {
+  const date = new Date(timestamp);
+  date.setDate(date.getDate() + 1);
+  return date.getTime();
+}
+
+function dateRangeBounds(range, day) {
+  const todayStart = startOfLocalDay();
+  if (range === "day" && /^\d{4}-\d{2}-\d{2}$/.test(day || "")) {
+    const [year, month, dayOfMonth] = day.split("-").map(Number);
+    const start = new Date(year, month - 1, dayOfMonth).getTime();
+    if (Number.isFinite(start)) {
+      return { start, end: nextDayStart(start), label: formatPostedDate(start) };
+    }
+  }
+  if (range === "today") return { start: todayStart, end: nextDayStart(todayStart), label: "Today" };
+  if (range === "week") return { start: todayStart - 6 * LIST_DAY_MS, end: nextDayStart(todayStart), label: "Last 7 days" };
+  if (range === "month") return { start: todayStart - 29 * LIST_DAY_MS, end: nextDayStart(todayStart), label: "Last 30 days" };
+  return { start: 0, end: Infinity, label: "All time" };
+}
+
+function filterListByDate(entries, range, day) {
+  const { start, end } = dateRangeBounds(range, day);
+  return entries.filter(([, entry]) => {
+    const timestamp = entryTimestamp(entry);
+    return timestamp >= start && timestamp < end;
+  });
+}
+
+function syncDateFilterTabs(filterEl, range) {
+  if (!filterEl) return;
+  filterEl.querySelectorAll(".filter-tab").forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.range === range);
+  });
+}
+
+function setListFilterSummary(el, visibleCount, totalCount, range, day, plural) {
+  if (!el) return;
+  if (totalCount === 0) {
+    el.textContent = "";
+    return;
+  }
+  const label = dateRangeBounds(range, day).label;
+  el.textContent = range === "all"
+    ? `${totalCount} ${plural} · ${label}`
+    : `Showing ${visibleCount} of ${totalCount} ${plural} · ${label}`;
+}
+
+function bindDateFilter(filterEl, dateInput, onChange) {
+  if (filterEl) {
+    filterEl.addEventListener("click", (event) => {
+      const tab = event.target.closest(".filter-tab");
+      if (!tab) return;
+      if (dateInput) dateInput.value = "";
+      const range = tab.dataset.range || "all";
+      syncDateFilterTabs(filterEl, range);
+      onChange(range, "");
+    });
+  }
+  if (dateInput) {
+    dateInput.addEventListener("change", () => {
+      const picked = /^\d{4}-\d{2}-\d{2}$/.test(dateInput.value) ? dateInput.value : "";
+      syncDateFilterTabs(filterEl, picked ? "day" : "all");
+      onChange(picked ? "day" : "all", picked);
+    });
+  }
+}
+
+bindDateFilter(leaderboardDateFilter, leaderboardDateInput, (range, day) => {
+  leaderboardDateRange = range;
+  leaderboardDateDay = day;
+  renderLeaderboardList();
+});
+
+bindDateFilter(notesDateFilter, notesDateInput, (range, day) => {
+  notesDateRange = range;
+  notesDateDay = day;
+  renderNotesList();
+});
+
+// =====================================================================
 // LEADERBOARD
 // =====================================================================
 async function loadAdminLeaderboard() {
@@ -1479,21 +1608,39 @@ async function loadAdminLeaderboard() {
 }
 
 function renderLeaderboardList() {
+  const visible = filterListByDate(cachedLeaderboard, leaderboardDateRange, leaderboardDateDay);
+  setListFilterSummary(
+    leaderboardDateSummary,
+    visible.length,
+    cachedLeaderboard.length,
+    leaderboardDateRange,
+    leaderboardDateDay,
+    "completions"
+  );
+
   if (cachedLeaderboard.length === 0) {
     adminLeaderboardList.innerHTML = `<p class="leaderboard-status">No completions yet.</p>`;
     return;
   }
+  if (visible.length === 0) {
+    adminLeaderboardList.innerHTML = `<p class="leaderboard-status">No completions match this date filter.</p>`;
+    return;
+  }
 
-  adminLeaderboardList.innerHTML = cachedLeaderboard
-    .map(
-      ([key, e]) => `
+  adminLeaderboardList.innerHTML = visible
+    .map(([key, e]) => {
+      const posted = entryTimestamp(e);
+      const duration = Number.isFinite(Number(e.time)) ? `Finished in ${formatTime(Number(e.time))}` : "Completion time not recorded";
+      return `
     <div class="admin-row">
       <div class="admin-row-info">
-        <div class="admin-row-name">${escapeHtml(e.name || "Anonymous")} — ${formatTime(e.time)}</div>
+        <div class="admin-row-name">${escapeHtml(e.name || "Anonymous")}</div>
+        <div class="admin-row-meta">${duration}</div>
+        <div class="admin-row-date">${posted ? `Posted ${escapeHtml(formatPostedDateTime(posted))}` : "Posted date not recorded"}</div>
       </div>
       <button class="admin-delete-btn" data-path="leaderboard/${key}" data-label="this leaderboard entry">Delete</button>
-    </div>`
-    )
+    </div>`;
+    })
     .join("");
 
   attachDeleteHandlers();
@@ -1555,7 +1702,10 @@ function openAdminNoteView(note) {
   } else {
     adminNoteViewContent.innerHTML = `<p>${escapeHtml(note.text || "")}</p>`;
   }
-  adminNoteViewName.textContent = `${noteTypeLabel(type)} · ${note.name || "Anonymous"}`;
+  const posted = entryTimestamp(note);
+  adminNoteViewName.textContent = `${noteTypeLabel(type)} · ${note.name || "Anonymous"}${
+    posted ? ` · Posted ${formatPostedDate(posted)}` : ""
+  }`;
   adminNoteViewModal.classList.remove("hidden");
 }
 
@@ -1579,12 +1729,26 @@ document.addEventListener("keydown", (event) => {
 });
 
 function renderNotesList() {
+  const visible = filterListByDate(cachedNotes, notesDateRange, notesDateDay);
+  setListFilterSummary(
+    notesDateSummary,
+    visible.length,
+    cachedNotes.length,
+    notesDateRange,
+    notesDateDay,
+    "notes"
+  );
+
   if (cachedNotes.length === 0) {
     adminNotesList.innerHTML = `<p class="leaderboard-status">No notes yet.</p>`;
     return;
   }
+  if (visible.length === 0) {
+    adminNotesList.innerHTML = `<p class="leaderboard-status">No notes match this date filter.</p>`;
+    return;
+  }
 
-  adminNotesList.innerHTML = cachedNotes
+  adminNotesList.innerHTML = visible
     .map(([key, note]) => {
       const type = note.type || "text";
       const isPhoto = type === "photo";
@@ -1593,6 +1757,7 @@ function renderNotesList() {
       const summary = type === "text" && note.text
         ? escapeHtml(note.text.slice(0, 120))
         : `${noteTypeLabel(type)} note`;
+      const posted = entryTimestamp(note);
       return `
     <div class="admin-row admin-note-row">
       <button type="button" class="admin-note-preview${isPhoto ? " type-photo" : ""}"${previewStyle} data-note-view="${escapeAttr(key)}" aria-label="View ${noteTypeLabel(type).toLowerCase()} note">
@@ -1601,6 +1766,7 @@ function renderNotesList() {
       <div class="admin-row-info">
         <div class="admin-row-name">${escapeHtml(note.name || "Anonymous")}</div>
         <div class="admin-row-meta">${summary}</div>
+        <div class="admin-row-date">${posted ? `Posted ${escapeHtml(formatPostedDate(posted))}` : "Posted date not recorded"}</div>
       </div>
       <div class="admin-row-actions">
         <button type="button" class="btn-tiny admin-note-view-btn" data-note-view="${escapeAttr(key)}">View</button>
