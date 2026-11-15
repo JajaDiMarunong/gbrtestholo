@@ -1,4 +1,4 @@
-self.APP_VERSION = "1.10.26";
+self.APP_VERSION = "1.10.27";
 
 const MUSEUM_ASSETS = [
   "./", "./index.html", "./style.css", "./app.js", "./offline-store.js", "./manifest.webmanifest",

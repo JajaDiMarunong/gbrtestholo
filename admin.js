@@ -219,6 +219,13 @@ if (window.location.search.indexOf("updated=") !== -1) {
 }
 
 const ADMIN_EMAIL = "jdconstantino5281@gmail.com";
+const LOGIN_FAILED_MESSAGE = "Login Failed. Incorrect Password";
+const LOGIN_CREDENTIAL_ERROR_CODES = new Set([
+  "auth/wrong-password",
+  "auth/user-not-found",
+  "auth/invalid-credential",
+  "auth/invalid-login-credentials"
+]);
 
 async function verifyAdminLoginChallenge() {
   const recaptcha = window.GBRRecaptcha;
@@ -252,6 +259,7 @@ function describeRecaptchaError(err) {
 btnAdminLoginSubmit.addEventListener("click", async () => {
   const password = adminPasswordInput.value;
   if (!password) {
+    adminLoginError.textContent = LOGIN_FAILED_MESSAGE;
     adminLoginError.classList.remove("hidden");
     return;
   }
@@ -273,10 +281,12 @@ btnAdminLoginSubmit.addEventListener("click", async () => {
   } catch (err) {
     console.error("[Admin] Login failed:", err);
     if (adminLoginStatus) adminLoginStatus.classList.add("hidden");
-    let msg = "Login failed";
-    if (err.code === "auth/wrong-password") msg = "Incorrect password";
-    else if (err.code === "auth/user-not-found") msg = "Admin user not found. Create in Firebase Console: jdconstantino5281@gmail.com";
+    let msg = "Login failed. Please try again.";
+    if (LOGIN_CREDENTIAL_ERROR_CODES.has(err.code)) msg = LOGIN_FAILED_MESSAGE;
     else if (err.code === "auth/invalid-email") msg = "Invalid email format";
+    else if (err.code === "auth/too-many-requests") msg = "Too many attempts. Wait a minute, then try again.";
+    else if (err.code === "auth/network-request-failed") msg = "No connection to Firebase. Check the internet and try again.";
+    else if (err.code === "auth/user-disabled") msg = "This admin account has been disabled.";
     else if (err.message) msg = err.message;
     adminLoginError.textContent = msg;
     adminLoginError.classList.remove("hidden");
