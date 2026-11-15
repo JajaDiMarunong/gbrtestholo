@@ -61,7 +61,7 @@ const badges = {
   firstQuiz: {
     id: "firstQuiz",
     name: "First Quiz",
-    description: "Complete your first artwork quiz",
+    description: "Pass your first artwork quiz",
     icon: "./assets/icons/badge.webp",
     earned: false,
   },
@@ -75,7 +75,7 @@ const badges = {
   allQuizzes: {
     id: "allQuizzes",
     name: "All Quizzes",
-    description: "Complete every artwork quiz",
+    description: "Pass every artwork quiz",
     icon: "./assets/icons/leaderboard.webp",
     earned: false,
   },
@@ -145,13 +145,28 @@ function artworkHasQuiz(art) {
   return Array.isArray(art.quiz) && art.quiz.length > 0;
 }
 
+const QUIZ_PASS_CORRECT = 2;
+
+// Kailangan ng 2 tamang sagot para makuha yung checkmark. Kung mas maikli
+// yung quiz (1 question lang), yung buong quiz na yung passing score.
+function quizPassTarget(total) {
+  const count = Number.isFinite(total) ? Math.max(0, Math.floor(total)) : 0;
+  return Math.min(QUIZ_PASS_CORRECT, count);
+}
+
 function getQuizStatus(art) {
   if (!artworkHasQuiz(art)) return { state: "none", label: "No quiz", title: "No quiz for this artwork" };
   if (art.quizCompleted) {
     const best = art.quizBest ? ` · best ${art.quizBest.correct}/${art.quizBest.total}` : "";
     return { state: "done", label: "Quiz ✓", title: `Quiz completed${best}` };
   }
-  return { state: art.unlocked ? "pending" : "locked", label: "Quiz", title: "Quiz not taken yet" };
+  const attempted = Boolean(art.quizBest);
+  const best = attempted ? ` · best ${art.quizBest.correct}/${art.quizBest.total}` : "";
+  return {
+    state: art.unlocked ? "pending" : "locked",
+    label: attempted ? "Retry" : "Quiz",
+    title: attempted ? `Quiz not passed yet${best}` : "Quiz not taken yet",
+  };
 }
 
 const screenUsername = document.getElementById("screen-username");
@@ -243,6 +258,7 @@ const quizResultPercent = document.getElementById("quiz-result-percent");
 const quizResultEyebrow = document.getElementById("quiz-result-eyebrow");
 const quizResultTitle = document.getElementById("quiz-result-title");
 const quizResultScore = document.getElementById("quiz-result-score");
+const quizResultStatus = document.getElementById("quiz-result-status");
 const quizResultDots = document.getElementById("quiz-result-dots");
 const quizResultBest = document.getElementById("quiz-result-best");
 const quizBadgeChips = document.getElementById("quiz-badge-chips");
@@ -1800,8 +1816,9 @@ function openDetail(artworkId) {
   detailText.textContent = art.details;
 
   const hasQuiz = artworkHasQuiz(art);
+  const quizAttempted = hasQuiz && Boolean(art.quizBest);
   btnTakeQuiz.classList.toggle("hidden", !hasQuiz);
-  btnTakeQuiz.textContent = art.quizCompleted ? "Retake the Quiz" : "Take the Quiz";
+  btnTakeQuiz.textContent = art.quizCompleted || quizAttempted ? "Retake the Quiz" : "Take the Quiz";
   quizDoneNote.classList.toggle("hidden", !art.quizCompleted);
   if (art.quizBest) {
     quizDoneNote.textContent = `✓ Quiz completed · best ${art.quizBest.correct} of ${art.quizBest.total}`;
@@ -1811,7 +1828,8 @@ function openDetail(artworkId) {
   quizDetailMeta.classList.toggle("hidden", !hasQuiz);
   if (hasQuiz) {
     const total = art.quiz.length;
-    quizDetailMeta.textContent = `${total} ${total === 1 ? "question" : "questions"} · no time limit`;
+    const passTarget = quizPassTarget(total);
+    quizDetailMeta.textContent = `${total} ${total === 1 ? "question" : "questions"} · ${passTarget} correct to pass · no time limit`;
   }
 
   const hasImmersive = !!art.immersiveSkybox;
@@ -2338,22 +2356,29 @@ btnQuizNext.addEventListener("click", () => {
 function finishQuiz(art) {
   const total = art.quiz.length;
   const correct = Math.min(countQuizCorrect(), total);
+  const passTarget = quizPassTarget(total);
+  const passed = correct >= passTarget;
   const previousBest = art.quizBest || null;
   const wasCompleted = art.quizCompleted;
-  const firstCompletionAnywhere = !artworks.some((a) => a.quizCompleted);
   const runId = quizRunId;
   const earnedBefore = new Set(Object.keys(badges).filter((key) => badges[key].earned));
 
-  art.quizCompleted = true;
+  // Checkmark lang kapag umabot sa passing score. Kapag nag-retake at bumaba
+  // ang score, hindi binubura yung checkmark na nakuha na dati.
+  if (passed) art.quizCompleted = true;
   if (!previousBest || correct > previousBest.correct) {
     art.quizBest = { correct, total };
   }
   persistProgress();
 
-  showQuizResult(art, correct, total, previousBest);
+  showQuizResult(art, correct, total, previousBest, { passed, passTarget, alreadyCompleted: wasCompleted });
 
-  if (!wasCompleted && firstCompletionAnywhere) awardBadge("firstQuiz", { celebrate: false });
-  checkAllQuizzesBadge({ celebrate: false });
+  // First Quiz badge lang kapag pumasa. Idempotent naman ang awardBadge,
+  // kaya safe itawag kahit na-earn na ito dati.
+  if (passed) awardBadge("firstQuiz", { celebrate: false });
+  // All Quizzes lang kapag may checkmark na yung quiz na ito at lahat ng
+  // iba pang quiz sa collection.
+  if (art.quizCompleted) checkAllQuizzesBadge({ celebrate: false });
   const earnedNow = Object.keys(badges).filter((key) => badges[key].earned && !earnedBefore.has(key));
   renderQuizBadgeChips(earnedNow);
 
@@ -2366,25 +2391,57 @@ function finishQuiz(art) {
   }
 }
 
-function showQuizResult(art, correct, total, previousBest) {
+function showQuizResult(art, correct, total, previousBest, outcome = {}) {
   quizQuestionView.classList.add("hidden");
   quizResultView.classList.remove("hidden");
   quizLeaveConfirm.classList.add("hidden");
   quizBadgeChips.innerHTML = "";
 
+  const passTarget = Number.isFinite(outcome.passTarget) ? outcome.passTarget : quizPassTarget(total);
+  const passed = Boolean(outcome.passed);
+  const alreadyCompleted = Boolean(outcome.alreadyCompleted);
   const percent = total ? Math.round((correct / total) * 100) : 0;
   quizResultPercent.textContent = `${percent}%`;
-  quizResultEyebrow.textContent = `Quiz complete · ${art.name}`;
+  quizResultEyebrow.textContent = passed ? `Quiz passed · ${art.name}` : `Quiz results · ${art.name}`;
   quizResultScore.textContent = `${correct} of ${total} correct`;
+
+  if (quizResultStatus) {
+    quizResultStatus.classList.remove("is-passed", "is-failed", "is-kept");
+    if (passed) {
+      quizResultStatus.textContent = alreadyCompleted
+        ? "✓ Passed again — your quiz checkmark is already saved."
+        : `✓ Passed — checkmark earned with ${correct} of ${total} correct.`;
+      quizResultStatus.classList.add("is-passed");
+    } else if (alreadyCompleted) {
+      quizResultStatus.textContent = "This attempt didn't pass, but your earlier quiz checkmark stays.";
+      quizResultStatus.classList.add("is-kept");
+    } else {
+      quizResultStatus.textContent = `✗ Not passed — you need ${passTarget} of ${total} correct to earn the checkmark. Tap Retake Quiz to try again.`;
+      quizResultStatus.classList.add("is-failed");
+    }
+  }
+
+  // Kapag bagsak, Retake Quiz yung primary action para madaling subukan ulit.
+  btnQuizRetake.classList.remove("hidden");
+  btnQuizRetake.textContent = "Retake Quiz";
+  btnQuizRetake.classList.toggle("btn-primary", !passed);
+  btnQuizRetake.classList.toggle("btn-secondary", passed);
+  btnQuizDone.classList.toggle("btn-primary", passed);
+  btnQuizDone.classList.toggle("btn-secondary", !passed);
 
   quizProgress.textContent = "Quiz complete";
   quizProgressFill.style.width = "100%";
   quizProgressTrack.setAttribute("aria-valuenow", "100");
 
-  let title = "Keep exploring";
-  if (percent === 100) title = "Perfect score!";
-  else if (percent >= 70) title = "Nicely done";
-  else if (percent >= 40) title = "Good effort";
+  let title = "Not passed yet";
+  if (passed) {
+    if (percent === 100) title = "Perfect score!";
+    else if (percent >= 70) title = "Nicely done";
+    else if (percent >= 40) title = "Good effort";
+    else title = "Quiz passed";
+  } else if (alreadyCompleted) {
+    title = "Checkmark kept";
+  }
   quizResultTitle.textContent = title;
 
   quizResultRing.style.strokeDasharray = String(QUIZ_RING_CIRCUMFERENCE);

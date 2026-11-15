@@ -506,6 +506,13 @@ button.corner-fabs-right {
 }
 .quiz-result-title { font-size: clamp(20px, 6vw, 26px); margin: 0 0 6px 0; }
 .quiz-result-score { margin: 0; font-size: 13.5px; color: var(--text-dim); }
+.quiz-result-status {
+  margin: 8px 0 0 0; font-size: 12px; font-weight: 600;
+  line-height: 1.5; color: var(--text-dim);
+}
+.quiz-result-status.is-passed { color: var(--success); }
+.quiz-result-status.is-failed { color: var(--danger); }
+.quiz-result-status.is-kept { color: var(--frame-gold); }
 .quiz-result-dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 16px 0 0 0; }
 .quiz-result-dot {
   width: 26px; height: 26px; border-radius: 50%;
