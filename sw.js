@@ -1,7 +1,7 @@
 importScripts("./asset-manifest.js");
 
-const CACHE_NAME = "gbr-museum-assets-v73";
-const DATA_CACHE = "gbr-museum-runtime-v73";
+const CACHE_NAME = "gbr-museum-assets-v74";
+const DATA_CACHE = "gbr-museum-runtime-v74";
 
 const CSP_HEADER = "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net https://aframe.io https://www.gstatic.com https://www.google.com https://recaptcha.google.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co https://www.gstatic.com https://www.google.com https://recaptcha.google.com; connect-src 'self' blob: https://*.firebasedatabase.app https://*.supabase.co https://twkgioiyfjfkppzerdii.functions.supabase.co https://cdn.jsdelivr.net https://www.gstatic.com https://aframe.io https://gbrmuseumtest.firebaseapp.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://twkgioiyfjfkppzerdii.supabase.co https://www.google.com https://recaptcha.google.com wss://*.firebasedatabase.app; frame-src https://www.google.com https://recaptcha.google.com; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
 
