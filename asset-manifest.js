@@ -1,7 +1,7 @@
-self.APP_VERSION = "1.10.28";
+self.APP_VERSION = "1.10.31";
 
 const MUSEUM_ASSETS = [
-  "./", "./index.html", "./style.css", "./app.js", "./offline-store.js", "./manifest.webmanifest",
+  "./", "./index.html", "./style.css", "./app.js", "./profanity-filter.js", "./offline-store.js", "./manifest.webmanifest",
   "./recaptcha.js", "./asset-manifest.js", "./sw.js", "./guestbook.html", "./guestbook.css",
   "./guestbook.js", "./admin.html", "./admin-manifest.webmanifest", "./admin.css", "./admin.js",
   "./assets/background.jpg", "./assets/logo.png", "./assets/icon-192.png",

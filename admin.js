@@ -39,9 +39,11 @@ const adminNotesList = document.getElementById("admin-notes-list");
 const leaderboardDateFilter = document.getElementById("leaderboard-date-filter");
 const leaderboardDateInput = document.getElementById("leaderboard-date");
 const leaderboardDateSummary = document.getElementById("leaderboard-date-summary");
+const leaderboardSearchInput = document.getElementById("leaderboard-search");
 const notesDateFilter = document.getElementById("notes-date-filter");
 const notesDateInput = document.getElementById("notes-date");
 const notesDateSummary = document.getElementById("notes-date-summary");
+const notesSearchInput = document.getElementById("notes-search");
 const adminNoteViewModal = document.getElementById("admin-note-view-modal");
 const adminNoteViewContent = document.getElementById("admin-note-view-content");
 const adminNoteViewName = document.getElementById("admin-note-view-name");
@@ -115,8 +117,10 @@ let cachedLeaderboard = [];
 let cachedNotes = [];
 let leaderboardDateRange = "all";
 let leaderboardDateDay = "";
+let leaderboardSearchQuery = "";
 let notesDateRange = "all";
 let notesDateDay = "";
+let notesSearchQuery = "";
 
 const ADMIN_RELEASE_VERSION = (typeof self !== "undefined" && self.APP_VERSION) || "1.0.0";
 
@@ -1387,11 +1391,25 @@ function dateRangeBounds(range, day) {
   return { start: 0, end: Infinity, label: "All time" };
 }
 
-function filterListByDate(entries, range, day) {
+function normalizeSearchText(value) {
+  return String(value == null ? "" : value).trim().toLowerCase();
+}
+
+function matchesSearchQuery(entry, query, fields) {
+  const terms = normalizeSearchText(query).split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return true;
+  const haystack = fields
+    .map((field) => normalizeSearchText(entry && entry[field]))
+    .join(" ");
+  return terms.every((term) => haystack.includes(term));
+}
+
+function filterListByDateAndSearch(entries, range, day, query, fields) {
   const { start, end } = dateRangeBounds(range, day);
   return entries.filter(([, entry]) => {
     const timestamp = entryTimestamp(entry);
-    return timestamp >= start && timestamp < end;
+    if (timestamp < start || timestamp >= end) return false;
+    return matchesSearchQuery(entry, query, fields);
   });
 }
 
@@ -1402,16 +1420,19 @@ function syncDateFilterTabs(filterEl, range) {
   });
 }
 
-function setListFilterSummary(el, visibleCount, totalCount, range, day, plural) {
+function setListFilterSummary(el, visibleCount, totalCount, range, day, plural, query) {
   if (!el) return;
   if (totalCount === 0) {
     el.textContent = "";
     return;
   }
   const label = dateRangeBounds(range, day).label;
-  el.textContent = range === "all"
-    ? `${totalCount} ${plural} · ${label}`
-    : `Showing ${visibleCount} of ${totalCount} ${plural} · ${label}`;
+  const search = String(query || "").trim();
+  if (!search && range === "all") {
+    el.textContent = `${totalCount} ${plural} · ${label}`;
+    return;
+  }
+  el.textContent = `Showing ${visibleCount} of ${totalCount} ${plural} · ${label}${search ? ` · “${search}”` : ""}`;
 }
 
 function bindDateFilter(filterEl, dateInput, onChange) {
@@ -1434,6 +1455,19 @@ function bindDateFilter(filterEl, dateInput, onChange) {
   }
 }
 
+function bindListSearch(inputEl, onChange) {
+  if (!inputEl) return;
+  const applyValue = () => onChange(inputEl.value);
+  inputEl.addEventListener("input", applyValue);
+  inputEl.addEventListener("search", applyValue);
+  inputEl.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && inputEl.value) {
+      inputEl.value = "";
+      applyValue();
+    }
+  });
+}
+
 bindDateFilter(leaderboardDateFilter, leaderboardDateInput, (range, day) => {
   leaderboardDateRange = range;
   leaderboardDateDay = day;
@@ -1443,6 +1477,16 @@ bindDateFilter(leaderboardDateFilter, leaderboardDateInput, (range, day) => {
 bindDateFilter(notesDateFilter, notesDateInput, (range, day) => {
   notesDateRange = range;
   notesDateDay = day;
+  renderNotesList();
+});
+
+bindListSearch(leaderboardSearchInput, (query) => {
+  leaderboardSearchQuery = query;
+  renderLeaderboardList();
+});
+
+bindListSearch(notesSearchInput, (query) => {
+  notesSearchQuery = query;
   renderNotesList();
 });
 
@@ -1460,14 +1504,21 @@ async function loadAdminLeaderboard() {
 }
 
 function renderLeaderboardList() {
-  const visible = filterListByDate(cachedLeaderboard, leaderboardDateRange, leaderboardDateDay);
+  const visible = filterListByDateAndSearch(
+    cachedLeaderboard,
+    leaderboardDateRange,
+    leaderboardDateDay,
+    leaderboardSearchQuery,
+    ["name"]
+  );
   setListFilterSummary(
     leaderboardDateSummary,
     visible.length,
     cachedLeaderboard.length,
     leaderboardDateRange,
     leaderboardDateDay,
-    "completions"
+    "completions",
+    leaderboardSearchQuery
   );
 
   if (cachedLeaderboard.length === 0) {
@@ -1475,7 +1526,7 @@ function renderLeaderboardList() {
     return;
   }
   if (visible.length === 0) {
-    adminLeaderboardList.innerHTML = `<p class="leaderboard-status">No completions match this date filter.</p>`;
+    adminLeaderboardList.innerHTML = `<p class="leaderboard-status">No completions match this search or date filter.</p>`;
     return;
   }
 
@@ -1578,14 +1629,21 @@ document.addEventListener("keydown", (event) => {
 });
 
 function renderNotesList() {
-  const visible = filterListByDate(cachedNotes, notesDateRange, notesDateDay);
+  const visible = filterListByDateAndSearch(
+    cachedNotes,
+    notesDateRange,
+    notesDateDay,
+    notesSearchQuery,
+    ["name", "text"]
+  );
   setListFilterSummary(
     notesDateSummary,
     visible.length,
     cachedNotes.length,
     notesDateRange,
     notesDateDay,
-    "notes"
+    "notes",
+    notesSearchQuery
   );
 
   if (cachedNotes.length === 0) {
@@ -1593,7 +1651,7 @@ function renderNotesList() {
     return;
   }
   if (visible.length === 0) {
-    adminNotesList.innerHTML = `<p class="leaderboard-status">No notes match this date filter.</p>`;
+    adminNotesList.innerHTML = `<p class="leaderboard-status">No notes match this search or date filter.</p>`;
     return;
   }
 

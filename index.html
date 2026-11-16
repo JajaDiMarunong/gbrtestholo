@@ -14,7 +14,7 @@
 <meta name="description" content="Augmented reality digital companion and collection experience for the GBR Jr. Museum." />
 <meta property="og:title" content="GBR Jr. Museum AR" />
 <meta property="og:description" content="Augmented reality digital companion and collection experience for the GBR Jr. Museum." />
-<link rel="stylesheet" href="style.css?v=53" />
+<link rel="stylesheet" href="style.css?v=55" />
 <link rel="manifest" href="manifest.webmanifest" />
 <meta name="theme-color" content="#1a1310" />
 <meta name="mobile-web-app-capable" content="yes" />
@@ -504,6 +504,7 @@
       <div id="note-color-swatches" class="note-color-swatches"></div>
 
       <textarea id="note-text-input" class="note-textarea" maxlength="120" placeholder="I was here…"></textarea>
+      <p id="note-text-error" class="admin-error hidden" role="alert"></p>
 
       <div id="note-draw-wrap" class="note-draw-wrap hidden">
         <canvas id="note-canvas" width="240" height="240"></canvas>
@@ -536,6 +537,18 @@
       <p id="note-view-name" class="modal-desc">—</p>
       <div class="modal-actions">
         <button id="btn-note-view-close" class="btn-secondary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="profanity-modal" class="modal-overlay profanity-modal hidden" role="alertdialog" aria-modal="true" aria-hidden="true" aria-labelledby="profanity-modal-title" aria-describedby="profanity-modal-desc">
+    <div class="modal-card profanity-modal-card">
+      <div class="profanity-modal-icon" aria-hidden="true">!</div>
+      <p class="modal-eyebrow">Friendly reminder</p>
+      <h2 id="profanity-modal-title">Please reconsider</h2>
+      <p id="profanity-modal-desc" class="modal-desc">Let's keep the museum family-friendly. Please revise your text and try again.</p>
+      <div class="modal-actions">
+        <button id="btn-profanity-modal-close" class="btn-primary" type="button">Got it</button>
       </div>
     </div>
   </div>
@@ -630,6 +643,7 @@
   </script>
 
   <script src="recaptcha.js?v=6" defer></script>
-  <script src="app.js?v=80" defer></script>
+  <script src="profanity-filter.js?v=1" defer></script>
+  <script src="app.js?v=82" defer></script>
 </body>
 </html>

@@ -467,12 +467,12 @@ function renderNotesBoard() {
     } else if (note.type === "draw") {
       el.innerHTML = `<img class="note-sticky-drawing" src="${note.drawing}" alt="drawing" />`;
     } else {
-      el.innerHTML = `<div class="note-sticky-text">${escapeHtml(note.text || "")}</div>`;
+      el.innerHTML = `<div class="note-sticky-text">${escapeHtml(publicNoteText(note))}</div>`;
     }
 
     const nameTag = document.createElement("div");
     nameTag.className = "note-sticky-name";
-    nameTag.textContent = note.name || "Anonymous";
+    nameTag.textContent = publicDisplayName(note.name);
     el.appendChild(nameTag);
 
     const postedDate = formatNoteDate(note.timestamp);
@@ -583,7 +583,7 @@ function renderLeaderboardList() {
       return `
         <div class="tv-leaderboard-row${rankClass}">
           <span class="tv-leaderboard-rank">${medal || "#" + rank}</span>
-          <span class="tv-leaderboard-name">${escapeHtml(e.name || "Anonymous")}${rank === 1 ? ' <span class="crown">👑</span>' : ""}</span>
+          <span class="tv-leaderboard-name">${escapeHtml(publicDisplayName(e.name))}${rank === 1 ? ' <span class="crown">👑</span>' : ""}</span>
           <span class="tv-leaderboard-time">${formatTime(e.time)}</span>
         </div>`;
     })
@@ -597,9 +597,9 @@ function openNoteView(note) {
   } else if (note.type === "draw") {
     noteViewContent.innerHTML = `<img src="${note.drawing}" alt="drawing" />`;
   } else {
-    noteViewContent.innerHTML = `<p>${escapeHtml(note.text || "")}</p>`;
+    noteViewContent.innerHTML = `<p>${escapeHtml(publicNoteText(note))}</p>`;
   }
-  noteViewName.textContent = `— ${note.name || "Anonymous"}`;
+  noteViewName.textContent = `— ${publicDisplayName(note.name)}`;
   noteViewModal.classList.remove("hidden");
 }
 btnNoteViewClose.addEventListener("click", () => noteViewModal.classList.add("hidden"));
@@ -620,6 +620,21 @@ function formatNoteDate(timestamp) {
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return "";
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function isProfaneText(value) {
+  return Boolean(window.ProfanityFilter && window.ProfanityFilter.hasProfanity(value));
+}
+
+function publicDisplayName(name) {
+  const value = String(name || "").trim() || "Anonymous";
+  return isProfaneText(value) ? "Anonymous" : value;
+}
+
+function publicNoteText(note) {
+  const text = String(note?.text || "");
+  if (!text) return "";
+  return isProfaneText(text) ? "This note is hidden because it contains inappropriate language." : text;
 }
 
 function escapeHtml(str) {

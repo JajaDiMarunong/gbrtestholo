@@ -670,6 +670,20 @@ svg { display: block; }
   gap: 10px;
   margin-bottom: 12px;
 }
+.list-filter-main {
+  display: flex;
+  flex: 1 1 560px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.search-field.list-filter-search {
+  flex: 0 1 270px;
+  min-width: 210px;
+  max-width: 340px;
+}
+.search-field.list-filter-search input { min-height: 24px; }
 .date-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
 .date-filter-pick { display: flex; align-items: center; gap: 6px; }
 .date-filter-pick > span {
@@ -1403,6 +1417,8 @@ body.drawer-open { overflow: hidden; }
   .admin-note-preview { width: 72px; height: 82px; }
   .date-select { width: 100%; }
   .list-filter-bar { width: 100%; align-items: flex-start; }
+  .list-filter-main { flex-basis: 100%; width: 100%; }
+  .search-field.list-filter-search { flex: 1 1 100%; width: 100%; max-width: none; }
   .date-filter { width: 100%; }
   .date-filter-pick { width: 100%; flex-direction: column; align-items: stretch; gap: 4px; }
   .text-input.date-input { width: 100%; }

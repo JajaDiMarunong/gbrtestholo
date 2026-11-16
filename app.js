@@ -344,6 +344,7 @@ const noteEditorEyebrow = document.getElementById("note-editor-eyebrow");
 const noteTabs = document.querySelectorAll(".note-tab");
 const noteColorSwatches = document.getElementById("note-color-swatches");
 const noteTextInput = document.getElementById("note-text-input");
+const noteTextError = document.getElementById("note-text-error");
 const noteDrawWrap = document.getElementById("note-draw-wrap");
 const noteCanvas = document.getElementById("note-canvas");
 const btnClearDrawing = document.getElementById("btn-clear-drawing");
@@ -362,6 +363,83 @@ const noteViewModal = document.getElementById("note-view-modal");
 const noteViewContent = document.getElementById("note-view-content");
 const noteViewName = document.getElementById("note-view-name");
 const btnNoteViewClose = document.getElementById("btn-note-view-close");
+
+const profanityModal = document.getElementById("profanity-modal");
+const profanityModalTitle = document.getElementById("profanity-modal-title");
+const profanityModalDesc = document.getElementById("profanity-modal-desc");
+const btnProfanityModalClose = document.getElementById("btn-profanity-modal-close");
+let profanityModalReturnFocus = null;
+
+let noteTextErrorKind = "";
+
+function showNoteTextError(message, kind = "text") {
+  if (!noteTextError) return;
+  noteTextErrorKind = kind;
+  noteTextError.textContent = message;
+  noteTextError.classList.remove("hidden");
+}
+
+function clearNoteTextError() {
+  noteTextErrorKind = "";
+  if (!noteTextError) return;
+  noteTextError.textContent = "";
+  noteTextError.classList.add("hidden");
+}
+
+function showProfanityModal(message, options = {}) {
+  if (!profanityModal || !profanityModalTitle || !profanityModalDesc || !btnProfanityModalClose) return;
+  profanityModalTitle.textContent = options.title || "Please reconsider";
+  profanityModalDesc.textContent = message;
+  btnProfanityModalClose.textContent = options.button || "Got it";
+  if (profanityModal.classList.contains("hidden")) {
+    profanityModalReturnFocus = options.returnFocus || document.activeElement;
+  }
+  profanityModal.classList.remove("hidden");
+  profanityModal.setAttribute("aria-hidden", "false");
+  btnProfanityModalClose.focus();
+}
+
+function hideProfanityModal() {
+  if (!profanityModal) return;
+  profanityModal.classList.add("hidden");
+  profanityModal.setAttribute("aria-hidden", "true");
+  const target = profanityModalReturnFocus;
+  profanityModalReturnFocus = null;
+  if (target && typeof target.focus === "function" && target.isConnected) target.focus();
+}
+
+if (profanityModal && btnProfanityModalClose) {
+  btnProfanityModalClose.addEventListener("click", hideProfanityModal);
+  profanityModal.addEventListener("click", (event) => {
+    if (event.target === profanityModal) hideProfanityModal();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !profanityModal.classList.contains("hidden")) {
+      event.preventDefault();
+      hideProfanityModal();
+    }
+  });
+}
+
+function rejectProfaneNoteText() {
+  showNoteTextError("Please remove inappropriate language before posting.");
+  showProfanityModal(
+    "Let's keep the museum family-friendly. This note contains language we can't publish, so it hasn't been submitted. Please choose different words and try again.",
+    { title: "Please reconsider your note", button: "I'll revise it", returnFocus: noteTextInput }
+  );
+}
+
+function rejectProfaneNoteName() {
+  showNoteTextError("Your display name contains inappropriate language. Change it in Settings before posting.", "name");
+  showProfanityModal(
+    "Let's keep the museum family-friendly. Your display name contains inappropriate language, so this note hasn't been posted. Please change your name in Settings and try again.",
+    { title: "Please update your display name", button: "Got it", returnFocus: btnNotePost }
+  );
+}
+
+noteTextInput.addEventListener("input", () => {
+  if (noteTextErrorKind === "text") clearNoteTextError();
+});
 
 const arContainer = document.getElementById("ar-container");
 const screenImmersive = document.getElementById("screen-immersive");
@@ -709,11 +787,49 @@ function nextAvailableName(desired, taken) {
   return { name: `${root.slice(0, NAME_LENGTH_LIMIT - 6)}(${Date.now() % 1000})`, conflict: true };
 }
 
+function isProfaneText(value) {
+  return Boolean(window.ProfanityFilter && window.ProfanityFilter.hasProfanity(value));
+}
+
+function publicDisplayName(name) {
+  const value = String(name || "").trim() || "Anonymous";
+  return isProfaneText(value) ? "Anonymous" : value;
+}
+
+function publicNoteText(note) {
+  const text = String(note?.text || "");
+  if (!text) return "";
+  return isProfaneText(text) ? "This note is hidden because it contains inappropriate language." : text;
+}
+
+function showUsernameError(message) {
+  usernameStatus.textContent = message;
+  usernameStatus.classList.remove("hidden");
+  usernameStatus.classList.add("is-error");
+}
+
+function rejectProfaneUsername() {
+  showUsernameError("Please choose a family-friendly name. Names with profanity aren't allowed.");
+  usernameInput.focus();
+  usernameInput.select();
+  showProfanityModal(
+    "Let's keep the museum family-friendly. That name contains language we can't use, so it hasn't been saved. Please choose another name and try again.",
+    { title: "Please choose another name", button: "I'll change it", returnFocus: usernameInput }
+  );
+}
+
+function clearUsernameError() {
+  usernameStatus.textContent = "";
+  usernameStatus.classList.add("hidden");
+  usernameStatus.classList.remove("is-error");
+}
+
 function setUsernameChecking(checking) {
   btnUsernameSubmit.disabled = checking;
   btnUsernameSubmit.textContent = checking ? "Checking name…" : "Enter Gallery";
   usernameStatus.textContent = checking ? "Checking whether that name is free…" : "";
   usernameStatus.classList.toggle("hidden", !checking);
+  usernameStatus.classList.remove("is-error");
 }
 
 function showUsernameConflict(desired, suggestion) {
@@ -733,6 +849,12 @@ function closeUsernameConflict() {
 }
 
 function applyUsername(name) {
+  if (isProfaneText(name)) {
+    closeUsernameConflict();
+    usernameStepPick.classList.remove("hidden");
+    rejectProfaneUsername();
+    return;
+  }
   currentUsername = name;
   persistProgress();
   closeUsernameConflict();
@@ -750,12 +872,19 @@ btnUsernameSubmit.addEventListener("click", submitUsername);
 usernameInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") submitUsername();
 });
+usernameInput.addEventListener("input", () => {
+  if (usernameStatus.classList.contains("is-error")) clearUsernameError();
+});
 
 async function submitUsername() {
   if (usernameCheckInFlight) return;
   const desired = normalizeUsername(usernameInput.value);
   if (!desired) {
     usernameInput.focus();
+    return;
+  }
+  if (isProfaneText(desired)) {
+    rejectProfaneUsername();
     return;
   }
 
@@ -774,6 +903,10 @@ async function submitUsername() {
     showUsernameConflict(desired, chosen.name);
     return;
   }
+  if (isProfaneText(chosen.name)) {
+    rejectProfaneUsername();
+    return;
+  }
   applyUsername(chosen.name);
 }
 
@@ -783,6 +916,7 @@ btnUsernameConfirm.addEventListener("click", () => {
 });
 btnUsernameCancel.addEventListener("click", () => {
   closeUsernameConflict();
+  clearUsernameError();
   usernameInput.focus();
   usernameInput.select();
 });
@@ -802,6 +936,7 @@ settingsChangeName.addEventListener("click", () => {
   returningToScreenAfterNameChange = showSettings;
   closeUsernameConflict();
   setUsernameChecking(false);
+  clearUsernameError();
   screenUsername.classList.remove("hidden");
   usernameInput.focus();
   usernameInput.select();
@@ -2599,7 +2734,7 @@ async function loadLeaderboard() {
         return `
       <div class="leaderboard-row${rankClass} stagger-in" style="--i:${i}">
         <span class="leaderboard-rank">${medal || "#" + rank}</span>
-        <span class="leaderboard-name">${escapeHtml(e.name || "Anonymous")}${
+        <span class="leaderboard-name">${escapeHtml(publicDisplayName(e.name))}${
           rank === 1 ? ' <span class="crown">👑</span>' : ""
         }</span>
         <span class="leaderboard-time">${formatTime(e.time)}</span>
@@ -2862,12 +2997,12 @@ function renderNotesBoard() {
     } else if (note.type === "draw") {
       el.innerHTML = `<img class="note-sticky-drawing" src="${note.drawing}" alt="drawing" />`;
     } else {
-      el.innerHTML = `<div class="note-sticky-text">${escapeHtml(note.text || "")}</div>`;
+      el.innerHTML = `<div class="note-sticky-text">${escapeHtml(publicNoteText(note))}</div>`;
     }
 
     const nameTag = document.createElement("div");
     nameTag.className = "note-sticky-name";
-    nameTag.textContent = note.name || "Anonymous";
+    nameTag.textContent = publicDisplayName(note.name);
     el.appendChild(nameTag);
 
     const postedDate = formatNoteDate(note.timestamp);
@@ -3043,6 +3178,7 @@ let capturedPhotoDataUrl = null;
 
 function setEditingMode(mode) {
   editingMode = mode;
+  clearNoteTextError();
   noteTabs.forEach((t) => t.classList.toggle("active", t.dataset.mode === mode));
   noteTextInput.classList.toggle("hidden", mode !== "text");
   noteDrawWrap.classList.toggle("hidden", mode !== "draw");
@@ -3166,6 +3302,7 @@ function openNoteEditor(existingNote) {
   noteEditorHeading.textContent = existingNote ? "Edit Your Note" : "Leave Your Mark";
   noteEditorEyebrow.textContent = "Your Notepad";
   btnNoteDelete.classList.toggle("hidden", !existingNote);
+  clearNoteTextError();
 
   selectedColor = existingNote?.color || NOTE_COLORS[0];
   renderColorSwatches();
@@ -3212,15 +3349,27 @@ btnNewNote.addEventListener("click", () => {
 
 btnNoteCancel.addEventListener("click", () => {
   stopPhotoPreview();
+  clearNoteTextError();
   noteEditorModal.classList.add("hidden");
 });
 
 btnNotePost.addEventListener("click", async () => {
   const isDraw = editingMode === "draw";
   const isPhoto = editingMode === "photo";
+  const text = noteTextInput.value.trim();
   if (isDraw && !hasDrawing) return;
   if (isPhoto && !capturedPhotoDataUrl) return;
-  if (!isDraw && !isPhoto && !noteTextInput.value.trim()) return;
+  if (!isDraw && !isPhoto && !text) return;
+
+  if (isProfaneText(currentUsername || "")) {
+    rejectProfaneNoteName();
+    return;
+  }
+  if (!isDraw && !isPhoto && isProfaneText(text)) {
+    rejectProfaneNoteText();
+    return;
+  }
+  clearNoteTextError();
 
   btnNotePost.disabled = true;
 
@@ -3231,7 +3380,7 @@ btnNotePost.addEventListener("click", async () => {
   }
 
   const note = {
-    name: currentUsername || "Anonymous",
+    name: publicDisplayName(currentUsername),
     type: editingMode,
     color: selectedColor,
     timestamp: Date.now(),
@@ -3241,7 +3390,7 @@ btnNotePost.addEventListener("click", async () => {
   };
   if (isDraw) note.drawing = noteCanvas.toDataURL("image/png");
   else if (isPhoto) note.photo = capturedPhotoDataUrl;
-  else note.text = noteTextInput.value.trim();
+  else note.text = text;
 
   try {
     const idToken = await user.getIdToken();
@@ -3279,9 +3428,9 @@ function openNoteView(note) {
   } else if (note.type === "draw") {
     noteViewContent.innerHTML = `<img src="${note.drawing}" alt="drawing" />`;
   } else {
-    noteViewContent.innerHTML = `<p>${escapeHtml(note.text || "")}</p>`;
+    noteViewContent.innerHTML = `<p>${escapeHtml(publicNoteText(note))}</p>`;
   }
-  noteViewName.textContent = `— ${note.name || "Anonymous"}`;
+  noteViewName.textContent = `— ${publicDisplayName(note.name)}`;
   noteViewModal.classList.remove("hidden");
 }
 btnNoteViewClose.addEventListener("click", () => noteViewModal.classList.add("hidden"));
@@ -3687,7 +3836,7 @@ function checkCollectionComplete() {
     leaderboardSubmitted = true;
     finalElapsedSeconds = Math.round((Date.now() - sessionStartTime) / 1000);
     persistProgress();
-    submitLeaderboardEntry(currentUsername || "Anonymous", finalElapsedSeconds);
+    submitLeaderboardEntry(publicDisplayName(currentUsername), finalElapsedSeconds);
     updateRunTimer();
   }
 }
@@ -4033,7 +4182,7 @@ async function sendHeartbeat() {
     await fetch(`${FIREBASE_URL}/presence/${user.uid}.json?auth=${idToken}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ timestamp: Date.now(), name: currentUsername || "Anonymous" }),
+      body: JSON.stringify({ timestamp: Date.now(), name: publicDisplayName(currentUsername) }),
     });
   } catch (err) {
   }
